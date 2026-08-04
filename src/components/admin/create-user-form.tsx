@@ -22,13 +22,22 @@ const ROLES = [
 export function CreateUserForm({
   vendors,
   branches,
+  allowSuperAdmin = true,
+  lockVendorId,
 }: {
   vendors: VendorOption[];
   branches: BranchOption[];
+  allowSuperAdmin?: boolean;
+  lockVendorId?: string;
 }) {
   const router = useRouter();
-  const [role, setRole] = useState<(typeof ROLES)[number]>("vendor_admin");
-  const [vendorId, setVendorId] = useState("");
+  const roleOptions = allowSuperAdmin
+    ? ROLES
+    : ROLES.filter((r) => r !== "super_admin");
+  const [role, setRole] = useState<(typeof ROLES)[number]>(
+    allowSuperAdmin ? "vendor_admin" : "data_entry",
+  );
+  const [vendorId, setVendorId] = useState(lockVendorId ?? "");
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -98,7 +107,7 @@ export function CreateUserForm({
           onChange={(e) => setRole(e.target.value as (typeof ROLES)[number])}
           className="h-9 w-full rounded-lg border border-input bg-background px-2 text-sm"
         >
-          {ROLES.map((r) => (
+          {roleOptions.map((r) => (
             <option key={r} value={r}>
               {r}
             </option>
@@ -117,8 +126,9 @@ export function CreateUserForm({
             name="vendor_id"
             required
             value={vendorId}
+            disabled={!!lockVendorId}
             onChange={(e) => setVendorId(e.target.value)}
-            className="h-9 w-full rounded-lg border border-input bg-background px-2 text-sm"
+            className="h-9 w-full rounded-lg border border-input bg-background px-2 text-sm disabled:opacity-70"
           >
             <option value="">Select vendor</option>
             {vendors.map((v) => (

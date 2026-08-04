@@ -45,6 +45,22 @@ const userSchema = z.object({
 async function requireSuperAdmin(): Promise<
   { ok: true; supabase: Sb } | { ok: false; error: string }
 > {
+  const auth = await requireManager();
+  if (!auth.ok) return auth;
+  if (auth.profile.role !== "super_admin") {
+    return { ok: false, error: "Forbidden — super admin only." };
+  }
+  return { ok: true, supabase: auth.supabase };
+}
+
+async function requireManager(): Promise<
+  | {
+      ok: true;
+      supabase: Sb;
+      profile: { id: string; role: UserRole; vendor_id: string | null };
+    }
+  | { ok: false; error: string }
+> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -53,15 +69,27 @@ async function requireSuperAdmin(): Promise<
 
   const { data: profile, error } = await supabase
     .from("app_users")
-    .select("role, status")
+    .select("id, role, status, vendor_id")
     .eq("id", user.id)
     .maybeSingle();
 
   if (error) return { ok: false, error: error.message };
-  if (!profile || profile.status !== "active" || profile.role !== "super_admin") {
-    return { ok: false, error: "Forbidden — super admin only." };
+  if (
+    !profile ||
+    profile.status !== "active" ||
+    !["super_admin", "vendor_admin"].includes(profile.role)
+  ) {
+    return { ok: false, error: "Forbidden — admin access required." };
   }
-  return { ok: true, supabase };
+  return {
+    ok: true,
+    supabase,
+    profile: {
+      id: profile.id,
+      role: profile.role,
+      vendor_id: profile.vendor_id,
+    },
+  };
 }
 
 function randomPassword() {
@@ -116,11 +144,18 @@ export async function createBranchAction(input: {
   contact_phone?: string;
 }) {
   try {
-    const auth = await requireSuperAdmin();
+    const auth = await requireManager();
     if (!auth.ok) return { error: auth.error };
 
     const parsed = branchSchema.safeParse(input);
     if (!parsed.success) return { error: formatZodError(parsed.error) };
+
+    if (
+      auth.profile.role === "vendor_admin" &&
+      parsed.data.vendor_id !== auth.profile.vendor_id
+    ) {
+      return { error: "You can only create branches for your own madrasa." };
+    }
 
     const { error } = await auth.supabase.from("branches").insert({
       vendor_id: parsed.data.vendor_id,
@@ -131,6 +166,7 @@ export async function createBranchAction(input: {
 
     if (error) return { error: error.message };
     revalidatePath("/super-admin");
+    revalidatePath("/vendor");
     return { ok: true as const };
   } catch (err) {
     console.error("[createBranchAction]", err);
@@ -151,11 +187,20 @@ export async function createAppUserAction(input: {
   temp_password?: string;
 }) {
   try {
-    const auth = await requireSuperAdmin();
+    const auth = await requireManager();
     if (!auth.ok) return { error: auth.error };
 
     const parsed = userSchema.safeParse(input);
     if (!parsed.success) return { error: formatZodError(parsed.error) };
+
+    if (auth.profile.role === "vendor_admin") {
+      if (parsed.data.role === "super_admin") {
+        return { error: "Vendor admins cannot create super admins." };
+      }
+      if (parsed.data.vendor_id !== auth.profile.vendor_id) {
+        return { error: "You can only create users for your own madrasa." };
+      }
+    }
 
     if (
       !process.env.SUPABASE_SECRET_KEY &&
@@ -194,11 +239,17 @@ export async function createAppUserAction(input: {
     }
 
     const role = parsed.data.role;
+    const vendorId =
+      role === "super_admin"
+        ? null
+        : (parsed.data.vendor_id ??
+          (auth.profile.role === "vendor_admin" ? auth.profile.vendor_id : null));
+
     const { error } = await admin.from("app_users").insert({
       id: authData.user.id,
       full_name: parsed.data.full_name,
       role,
-      vendor_id: role === "super_admin" ? null : (parsed.data.vendor_id ?? null),
+      vendor_id: vendorId,
       branch_id: ["data_entry", "accountant", "principal"].includes(role)
         ? (parsed.data.branch_id ?? null)
         : null,
@@ -218,13 +269,14 @@ export async function createAppUserAction(input: {
         fullName: parsed.data.full_name,
         email: parsed.data.email,
         tempPassword,
-        vendorId: parsed.data.vendor_id,
+        vendorId,
       });
     } catch (waErr) {
       console.error("[whatsapp]", waErr);
     }
 
     revalidatePath("/super-admin");
+    revalidatePath("/vendor");
     return {
       ok: true as const,
       credentials: { email: parsed.data.email, tempPassword },

@@ -1,11 +1,21 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+
 import { createClient } from "@/lib/supabase/server";
+import { formatDate, formatMoney } from "@/lib/format";
 import { AppShell } from "@/components/layout/app-shell";
+import { EmptyRow, PanelTable } from "@/components/layout/panel-table";
 import {
   Card,
+  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { CreateUserForm } from "@/components/admin/create-user-form";
+import { CreateBranchForm } from "@/components/admin/create-branch-form";
+import { ToggleUserStatusButton } from "@/components/admin/status-toggles";
 
 export default async function VendorDashboardPage() {
   const supabase = await createClient();
@@ -18,30 +28,114 @@ export default async function VendorDashboardPage() {
     .eq("id", user!.id)
     .single();
 
-  const vendorId = profile!.vendor_id;
+  if (!profile?.vendor_id && profile?.role !== "super_admin") {
+    redirect("/login");
+  }
+
+  const vendorId = profile!.vendor_id!;
+
+  const { data: vendor } = await supabase
+    .from("vendors")
+    .select("*")
+    .eq("id", vendorId)
+    .maybeSingle();
 
   const [
     { count: students },
+    { count: staffCount },
     { count: pendingPayments },
     { count: pendingDonations },
+    { count: approvedPayments },
     { data: dues },
+    { data: branches },
+    { data: staff },
+    { data: recentStudents },
+    { data: payments },
+    { data: donations },
+    { data: accounts },
+    { data: ledger },
+    { data: auditLogs },
   ] = await Promise.all([
     supabase
       .from("students")
       .select("*", { count: "exact", head: true })
+      .eq("vendor_id", vendorId)
       .eq("status", "active"),
+    supabase
+      .from("app_users")
+      .select("*", { count: "exact", head: true })
+      .eq("vendor_id", vendorId),
     supabase
       .from("payments")
       .select("*", { count: "exact", head: true })
+      .eq("vendor_id", vendorId)
       .in("status", ["pending_accountant", "pending_principal"]),
     supabase
       .from("donations")
       .select("*", { count: "exact", head: true })
+      .eq("vendor_id", vendorId)
       .in("status", ["pending_accountant", "pending_principal"]),
+    supabase
+      .from("payments")
+      .select("*", { count: "exact", head: true })
+      .eq("vendor_id", vendorId)
+      .eq("status", "approved"),
     supabase
       .from("fee_dues")
       .select("total_due, amount_paid")
+      .eq("vendor_id", vendorId)
       .neq("status", "paid"),
+    supabase
+      .from("branches")
+      .select("id, name, vendor_id, contact_phone, address")
+      .eq("vendor_id", vendorId)
+      .order("name"),
+    supabase
+      .from("app_users")
+      .select(
+        "id, full_name, role, status, whatsapp_number, phone, created_at, branch_id",
+      )
+      .eq("vendor_id", vendorId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("students")
+      .select(
+        "id, admission_no, full_name, guardian_name, guardian_phone, status, branch_id, created_at",
+      )
+      .eq("vendor_id", vendorId)
+      .order("created_at", { ascending: false })
+      .limit(25),
+    supabase
+      .from("payments")
+      .select("id, amount, status, method, created_at, student_id, branch_id")
+      .eq("vendor_id", vendorId)
+      .order("created_at", { ascending: false })
+      .limit(25),
+    supabase
+      .from("donations")
+      .select("id, amount, status, donor_name, type, created_at, branch_id")
+      .eq("vendor_id", vendorId)
+      .order("created_at", { ascending: false })
+      .limit(25),
+    supabase
+      .from("accounts")
+      .select("*")
+      .eq("vendor_id", vendorId)
+      .order("name"),
+    supabase
+      .from("ledger_entries")
+      .select(
+        "id, entry_type, amount, entry_date, source_table, account_id, branch_id",
+      )
+      .eq("vendor_id", vendorId)
+      .order("created_at", { ascending: false })
+      .limit(30),
+    supabase
+      .from("audit_logs")
+      .select("id, action, table_name, created_at")
+      .eq("vendor_id", vendorId)
+      .order("created_at", { ascending: false })
+      .limit(20),
   ]);
 
   const outstanding = (dues ?? []).reduce(
@@ -49,20 +143,52 @@ export default async function VendorDashboardPage() {
     0,
   );
 
+  const branchMap = new Map((branches ?? []).map((b) => [b.id, b.name]));
+  const studentMap = new Map(
+    (recentStudents ?? []).map((s) => [s.id, s.full_name]),
+  );
+  const accountMap = new Map((accounts ?? []).map((a) => [a.id, a.name]));
+
+  // Fill student names for payments that may not be in recentStudents slice
+  const missingStudentIds = [
+    ...new Set(
+      (payments ?? [])
+        .map((p) => p.student_id)
+        .filter((id) => !studentMap.has(id)),
+    ),
+  ];
+  if (missingStudentIds.length > 0) {
+    const { data: extraStudents } = await supabase
+      .from("students")
+      .select("id, full_name")
+      .in("id", missingStudentIds);
+    for (const s of extraStudents ?? []) studentMap.set(s.id, s.full_name);
+  }
+
   return (
     <AppShell
       profile={profile!}
-      title="Vendor dashboard"
+      title={vendor?.name ?? "Vendor dashboard"}
       nav={[
         { href: "/vendor", label: "Overview" },
-        { href: "/branch", label: "Operations" },
+        { href: "/vendor#staff", label: "Staff" },
+        { href: "/vendor#students", label: "Students" },
+        { href: "/vendor#finance", label: "Finance" },
+        { href: "/branch", label: "Branch ops" },
       ]}
     >
       <p className="mb-6 text-sm text-[#5a6f65]">
-        Vendor ID: {vendorId ?? "n/a"} · Currency{" "}
+        Full visibility for your madrasa · Currency{" "}
         {process.env.NEXT_PUBLIC_CURRENCY ?? "LKR"}
+        {vendor?.status ? (
+          <>
+            {" "}
+            · Status <StatusBadge value={vendor.status} />
+          </>
+        ) : null}
       </p>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+
+      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Active students</CardDescription>
@@ -71,13 +197,14 @@ export default async function VendorDashboardPage() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
+            <CardDescription>Staff</CardDescription>
+            <CardTitle className="text-3xl">{staffCount ?? 0}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
             <CardDescription>Outstanding dues</CardDescription>
-            <CardTitle className="text-3xl">
-              {outstanding.toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
-            </CardTitle>
+            <CardTitle className="text-xl">{formatMoney(outstanding)}</CardTitle>
           </CardHeader>
         </Card>
         <Card>
@@ -91,6 +218,254 @@ export default async function VendorDashboardPage() {
             <CardDescription>Pending donations</CardDescription>
             <CardTitle className="text-3xl">{pendingDonations ?? 0}</CardTitle>
           </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Approved payments</CardDescription>
+            <CardTitle className="text-3xl">{approvedPayments ?? 0}</CardTitle>
+          </CardHeader>
+        </Card>
+      </div>
+
+      <div className="mb-4 flex flex-wrap gap-3 text-sm">
+        <Link
+          href="/branch"
+          className="rounded-md bg-[#0b3d2e] px-3 py-2 text-[#f7faf8]"
+        >
+          Open branch operations
+        </Link>
+        <a
+          href="#create-staff"
+          className="rounded-md border border-[#0b3d2e]/30 px-3 py-2 text-[#0b3d2e]"
+        >
+          Add staff
+        </a>
+      </div>
+
+      <PanelTable
+        id="staff"
+        title="Staff directory"
+        description="Everyone working in your madrasa."
+        headers={["Name", "Role", "Branch", "WhatsApp", "Status", "Joined", ""]}
+      >
+        {(staff ?? []).length === 0 ? (
+          <EmptyRow colSpan={7}>No staff yet. Add users below.</EmptyRow>
+        ) : (
+          (staff ?? []).map((s) => (
+            <tr key={s.id} className="border-t border-[#0b3d2e]/8">
+              <td className="px-3 py-2 font-medium">{s.full_name}</td>
+              <td className="px-3 py-2">
+                <StatusBadge value={s.role} />
+              </td>
+              <td className="px-3 py-2">
+                {s.branch_id ? branchMap.get(s.branch_id) ?? "—" : "—"}
+              </td>
+              <td className="px-3 py-2">{s.whatsapp_number || "—"}</td>
+              <td className="px-3 py-2">
+                <StatusBadge value={s.status} />
+              </td>
+              <td className="px-3 py-2">{formatDate(s.created_at)}</td>
+              <td className="px-3 py-2">
+                {s.id !== user!.id ? (
+                  <ToggleUserStatusButton userId={s.id} status={s.status} />
+                ) : null}
+              </td>
+            </tr>
+          ))
+        )}
+      </PanelTable>
+
+      <PanelTable
+        id="students"
+        title="Students"
+        headers={[
+          "Admission",
+          "Name",
+          "Guardian",
+          "Phone",
+          "Branch",
+          "Status",
+          "Joined",
+        ]}
+      >
+        {(recentStudents ?? []).length === 0 ? (
+          <EmptyRow colSpan={7}>
+            No students yet. Add them from{" "}
+            <Link href="/branch" className="underline">
+              Branch ops
+            </Link>
+            .
+          </EmptyRow>
+        ) : (
+          (recentStudents ?? []).map((s) => (
+            <tr key={s.id} className="border-t border-[#0b3d2e]/8">
+              <td className="px-3 py-2">{s.admission_no}</td>
+              <td className="px-3 py-2 font-medium">{s.full_name}</td>
+              <td className="px-3 py-2">{s.guardian_name}</td>
+              <td className="px-3 py-2">{s.guardian_phone}</td>
+              <td className="px-3 py-2">
+                {s.branch_id ? branchMap.get(s.branch_id) ?? "—" : "—"}
+              </td>
+              <td className="px-3 py-2">
+                <StatusBadge value={s.status} />
+              </td>
+              <td className="px-3 py-2">{formatDate(s.created_at)}</td>
+            </tr>
+          ))
+        )}
+      </PanelTable>
+
+      <div id="finance" className="grid gap-6 lg:grid-cols-2">
+        <PanelTable
+          title="Payments"
+          headers={["Student", "Branch", "Amount", "Status", "Date"]}
+        >
+          {(payments ?? []).length === 0 ? (
+            <EmptyRow colSpan={5}>No payments recorded.</EmptyRow>
+          ) : (
+            (payments ?? []).map((p) => (
+              <tr key={p.id} className="border-t border-[#0b3d2e]/8">
+                <td className="px-3 py-2">
+                  {studentMap.get(p.student_id) ?? "—"}
+                </td>
+                <td className="px-3 py-2">
+                  {p.branch_id ? branchMap.get(p.branch_id) ?? "—" : "—"}
+                </td>
+                <td className="px-3 py-2">{formatMoney(p.amount)}</td>
+                <td className="px-3 py-2">
+                  <StatusBadge value={p.status} />
+                </td>
+                <td className="px-3 py-2">{formatDate(p.created_at)}</td>
+              </tr>
+            ))
+          )}
+        </PanelTable>
+
+        <PanelTable
+          title="Donations"
+          headers={["Donor", "Branch", "Amount", "Status", "Date"]}
+        >
+          {(donations ?? []).length === 0 ? (
+            <EmptyRow colSpan={5}>No donations recorded.</EmptyRow>
+          ) : (
+            (donations ?? []).map((d) => (
+              <tr key={d.id} className="border-t border-[#0b3d2e]/8">
+                <td className="px-3 py-2">{d.donor_name}</td>
+                <td className="px-3 py-2">
+                  {d.branch_id ? branchMap.get(d.branch_id) ?? "—" : "—"}
+                </td>
+                <td className="px-3 py-2">{formatMoney(d.amount)}</td>
+                <td className="px-3 py-2">
+                  <StatusBadge value={d.status} />
+                </td>
+                <td className="px-3 py-2">{formatDate(d.created_at)}</td>
+              </tr>
+            ))
+          )}
+        </PanelTable>
+      </div>
+
+      <PanelTable
+        title="Account balances"
+        headers={["Account", "Type", "Opening", "Current"]}
+      >
+        {(accounts ?? []).length === 0 ? (
+          <EmptyRow colSpan={4}>No ledger accounts.</EmptyRow>
+        ) : (
+          (accounts ?? []).map((a) => (
+            <tr key={a.id} className="border-t border-[#0b3d2e]/8">
+              <td className="px-3 py-2">{a.name}</td>
+              <td className="px-3 py-2 capitalize">{a.type}</td>
+              <td className="px-3 py-2">{formatMoney(a.opening_balance)}</td>
+              <td className="px-3 py-2 font-medium">
+                {formatMoney(a.current_balance)}
+              </td>
+            </tr>
+          ))
+        )}
+      </PanelTable>
+
+      <PanelTable
+        title="Ledger entries"
+        headers={["Date", "Account", "Branch", "Type", "Amount", "Source"]}
+      >
+        {(ledger ?? []).length === 0 ? (
+          <EmptyRow colSpan={6}>
+            No posted ledger entries yet (appear after principal approval).
+          </EmptyRow>
+        ) : (
+          (ledger ?? []).map((e) => (
+            <tr key={e.id} className="border-t border-[#0b3d2e]/8">
+              <td className="px-3 py-2">{formatDate(e.entry_date)}</td>
+              <td className="px-3 py-2">
+                {accountMap.get(e.account_id) ?? "—"}
+              </td>
+              <td className="px-3 py-2">
+                {e.branch_id ? branchMap.get(e.branch_id) ?? "—" : "—"}
+              </td>
+              <td className="px-3 py-2 capitalize">{e.entry_type}</td>
+              <td className="px-3 py-2">{formatMoney(e.amount)}</td>
+              <td className="px-3 py-2">{e.source_table}</td>
+            </tr>
+          ))
+        )}
+      </PanelTable>
+
+      <PanelTable title="Activity log" headers={["When", "Action", "Table"]}>
+        {(auditLogs ?? []).length === 0 ? (
+          <EmptyRow colSpan={3}>No activity yet.</EmptyRow>
+        ) : (
+          (auditLogs ?? []).map((a) => (
+            <tr key={a.id} className="border-t border-[#0b3d2e]/8">
+              <td className="px-3 py-2">{formatDate(a.created_at)}</td>
+              <td className="px-3 py-2">{a.action}</td>
+              <td className="px-3 py-2">{a.table_name}</td>
+            </tr>
+          ))
+        )}
+      </PanelTable>
+
+      <div id="create-staff" className="mt-10 grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Add branch</CardTitle>
+            <CardDescription>
+              Create another branch under your madrasa.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CreateBranchForm
+              vendors={
+                vendor
+                  ? [{ id: vendor.id, name: vendor.name }]
+                  : [{ id: vendorId, name: "This madrasa" }]
+              }
+            />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Add staff user</CardTitle>
+            <CardDescription>
+              Vendor admin, data entry, accountant, or principal.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CreateUserForm
+              vendors={
+                vendor
+                  ? [{ id: vendor.id, name: vendor.name }]
+                  : [{ id: vendorId, name: "This madrasa" }]
+              }
+              branches={(branches ?? []).map((b) => ({
+                id: b.id,
+                name: b.name,
+                vendor_id: b.vendor_id,
+              }))}
+              allowSuperAdmin={false}
+              lockVendorId={vendorId}
+            />
+          </CardContent>
         </Card>
       </div>
     </AppShell>
