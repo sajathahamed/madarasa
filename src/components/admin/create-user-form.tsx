@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 
 import { createAppUserAction } from "@/actions/admin";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,7 @@ export function CreateUserForm({
   vendors: VendorOption[];
   branches: BranchOption[];
 }) {
+  const router = useRouter();
   const [role, setRole] = useState<(typeof ROLES)[number]>("vendor_admin");
   const [vendorId, setVendorId] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -43,30 +45,39 @@ export function CreateUserForm({
       className="grid gap-3 md:grid-cols-2"
       onSubmit={(e) => {
         e.preventDefault();
-        const fd = new FormData(e.currentTarget);
+        const form = e.currentTarget;
+        const fd = new FormData(form);
+        setMessage(null);
         startTransition(async () => {
-          const result = await createAppUserAction({
-            email: String(fd.get("email") ?? ""),
-            full_name: String(fd.get("full_name") ?? ""),
-            role,
-            vendor_id: needsVendor ? vendorId || null : null,
-            branch_id: needsBranch
-              ? String(fd.get("branch_id") ?? "") || null
-              : null,
-            phone: String(fd.get("phone") ?? "") || undefined,
-            whatsapp_number: String(fd.get("whatsapp_number") ?? ""),
-            temp_password: String(fd.get("temp_password") ?? "") || undefined,
-          });
+          try {
+            const result = await createAppUserAction({
+              email: String(fd.get("email") ?? ""),
+              full_name: String(fd.get("full_name") ?? ""),
+              role,
+              vendor_id: needsVendor ? vendorId || null : null,
+              branch_id: needsBranch
+                ? String(fd.get("branch_id") ?? "") || null
+                : null,
+              phone: String(fd.get("phone") ?? "") || undefined,
+              whatsapp_number: String(fd.get("whatsapp_number") ?? ""),
+              temp_password: String(fd.get("temp_password") ?? "") || undefined,
+            });
 
-          if (result.error) {
-            setMessage(result.error);
-            return;
+            if (result.error) {
+              setMessage(result.error);
+              return;
+            }
+
+            setMessage(
+              `User created. Temp password: ${result.credentials?.tempPassword}`,
+            );
+            form.reset();
+            router.refresh();
+          } catch (err) {
+            setMessage(
+              err instanceof Error ? err.message : "Unexpected error creating user",
+            );
           }
-
-          setMessage(
-            `User created. Temp password: ${result.credentials?.tempPassword}`,
-          );
-          e.currentTarget.reset();
         });
       }}
     >
@@ -145,7 +156,13 @@ export function CreateUserForm({
         <Input id="temp_password" name="temp_password" />
       </div>
       <div className="md:col-span-2 space-y-2">
-        {message ? <p className="text-sm text-[#2f4a3f]">{message}</p> : null}
+        {message ? (
+          <p
+            className={`text-sm ${message.startsWith("User created") ? "text-[#2f4a3f]" : "text-red-700"}`}
+          >
+            {message}
+          </p>
+        ) : null}
         <Button type="submit" disabled={pending} className="bg-[#0b3d2e]">
           {pending ? "Creating…" : "Create user + send WhatsApp"}
         </Button>

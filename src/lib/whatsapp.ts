@@ -137,21 +137,24 @@ export async function sendWhatsAppTemplate(input: SendTemplateInput) {
       sent_at: result.ok ? new Date().toISOString() : null,
     });
   } catch {
-    // Logging must not break business flow if admin key missing during setup
-    const supabase = await createClient();
-    await supabase.from("whatsapp_messages").insert({
-      vendor_id: input.vendorId ?? null,
-      student_id: input.studentId ?? null,
-      recipient_phone: normalizePhone(input.to),
-      message_type: input.messageType,
-      template_name: input.templateName,
-      status: result.ok ? "sent" : "queued",
-      provider_response: {
-        provider,
-        result,
-        note: "queued locally — configure WhatsApp + service role",
-      } as never,
-    });
+    try {
+      const supabase = await createClient();
+      await supabase.from("whatsapp_messages").insert({
+        vendor_id: input.vendorId ?? null,
+        student_id: input.studentId ?? null,
+        recipient_phone: normalizePhone(input.to),
+        message_type: input.messageType,
+        template_name: input.templateName,
+        status: result.ok ? "sent" : "queued",
+        provider_response: {
+          provider,
+          result,
+          note: "queued locally — configure WhatsApp + service role",
+        } as never,
+      });
+    } catch (logErr) {
+      console.error("[whatsapp log]", logErr);
+    }
   }
 
   return result;

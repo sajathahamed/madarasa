@@ -1,11 +1,15 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { sendCredentialsWhatsApp } from "@/lib/whatsapp";
-import type { UserRole } from "@/types/database";
+import type { Database, UserRole } from "@/types/database";
+
+type Sb = SupabaseClient<Database>;
 
 const vendorSchema = z.object({
   name: z.string().min(2),
@@ -38,23 +42,26 @@ const userSchema = z.object({
   temp_password: z.string().min(8).optional(),
 });
 
-async function requireSuperAdmin() {
+async function requireSuperAdmin(): Promise<
+  { ok: true; supabase: Sb } | { ok: false; error: string }
+> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) throw new Error("Unauthorized");
+  if (!user) return { ok: false, error: "Unauthorized — please sign in again." };
 
-  const { data: profile } = await supabase
+  const { data: profile, error } = await supabase
     .from("app_users")
-    .select("*")
+    .select("role, status")
     .eq("id", user.id)
-    .single();
+    .maybeSingle();
 
-  if (!profile || profile.role !== "super_admin") {
-    throw new Error("Forbidden");
+  if (error) return { ok: false, error: error.message };
+  if (!profile || profile.status !== "active" || profile.role !== "super_admin") {
+    return { ok: false, error: "Forbidden — super admin only." };
   }
-  return { supabase, user, profile };
+  return { ok: true, supabase };
 }
 
 function randomPassword() {
@@ -67,98 +74,165 @@ function randomPassword() {
   return out;
 }
 
-export async function createVendorAction(input: z.infer<typeof vendorSchema>) {
-  await requireSuperAdmin();
-  const parsed = vendorSchema.parse(input);
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("vendors")
-    .insert({
-      name: parsed.name,
-      address: parsed.address || null,
-      contact_phone: parsed.contact_phone || null,
-      whatsapp_number: parsed.whatsapp_number,
-    })
-    .select()
-    .single();
-
-  if (error) return { error: error.message };
-  return { data };
+function formatZodError(err: z.ZodError) {
+  return err.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
 }
 
-export async function createBranchAction(input: z.infer<typeof branchSchema>) {
-  await requireSuperAdmin();
-  const parsed = branchSchema.parse(input);
-  const supabase = await createClient();
+export async function createVendorAction(input: {
+  name: string;
+  address?: string;
+  contact_phone?: string;
+  whatsapp_number: string;
+}) {
+  try {
+    const auth = await requireSuperAdmin();
+    if (!auth.ok) return { error: auth.error };
 
-  const { data, error } = await supabase
-    .from("branches")
-    .insert({
-      vendor_id: parsed.vendor_id,
-      name: parsed.name,
-      address: parsed.address || null,
-      contact_phone: parsed.contact_phone || null,
-    })
-    .select()
-    .single();
+    const parsed = vendorSchema.safeParse(input);
+    if (!parsed.success) return { error: formatZodError(parsed.error) };
 
-  if (error) return { error: error.message };
-  return { data };
-}
-
-export async function createAppUserAction(input: z.infer<typeof userSchema>) {
-  await requireSuperAdmin();
-  const parsed = userSchema.parse(input);
-  const tempPassword = parsed.temp_password || randomPassword();
-  const admin = createAdminClient();
-
-  const { data: authData, error: authError } =
-    await admin.auth.admin.createUser({
-      email: parsed.email,
-      password: tempPassword,
-      email_confirm: true,
-      user_metadata: { full_name: parsed.full_name },
-      app_metadata: { role: parsed.role },
+    const { error } = await auth.supabase.from("vendors").insert({
+      name: parsed.data.name,
+      address: parsed.data.address || null,
+      contact_phone: parsed.data.contact_phone || null,
+      whatsapp_number: parsed.data.whatsapp_number,
     });
 
-  if (authError || !authData.user) {
-    return { error: authError?.message ?? "Failed to create auth user" };
+    if (error) return { error: error.message };
+    revalidatePath("/super-admin");
+    return { ok: true as const };
+  } catch (err) {
+    console.error("[createVendorAction]", err);
+    return {
+      error: err instanceof Error ? err.message : "Failed to create vendor",
+    };
   }
+}
 
-  const role = parsed.role as UserRole;
-  const { data, error } = await admin
-    .from("app_users")
-    .insert({
+export async function createBranchAction(input: {
+  vendor_id: string;
+  name: string;
+  address?: string;
+  contact_phone?: string;
+}) {
+  try {
+    const auth = await requireSuperAdmin();
+    if (!auth.ok) return { error: auth.error };
+
+    const parsed = branchSchema.safeParse(input);
+    if (!parsed.success) return { error: formatZodError(parsed.error) };
+
+    const { error } = await auth.supabase.from("branches").insert({
+      vendor_id: parsed.data.vendor_id,
+      name: parsed.data.name,
+      address: parsed.data.address || null,
+      contact_phone: parsed.data.contact_phone || null,
+    });
+
+    if (error) return { error: error.message };
+    revalidatePath("/super-admin");
+    return { ok: true as const };
+  } catch (err) {
+    console.error("[createBranchAction]", err);
+    return {
+      error: err instanceof Error ? err.message : "Failed to create branch",
+    };
+  }
+}
+
+export async function createAppUserAction(input: {
+  email: string;
+  full_name: string;
+  role: UserRole;
+  vendor_id?: string | null;
+  branch_id?: string | null;
+  phone?: string;
+  whatsapp_number: string;
+  temp_password?: string;
+}) {
+  try {
+    const auth = await requireSuperAdmin();
+    if (!auth.ok) return { error: auth.error };
+
+    const parsed = userSchema.safeParse(input);
+    if (!parsed.success) return { error: formatZodError(parsed.error) };
+
+    if (
+      !process.env.SUPABASE_SECRET_KEY &&
+      !process.env.SUPABASE_SERVICE_ROLE_KEY
+    ) {
+      return {
+        error:
+          "Missing SUPABASE_SECRET_KEY on the server. Add it in Vercel → Settings → Environment Variables (Supabase → API Keys → Secret key), then Redeploy.",
+      };
+    }
+
+    let admin;
+    try {
+      admin = createAdminClient();
+    } catch (err) {
+      return {
+        error:
+          err instanceof Error
+            ? err.message
+            : "Admin client unavailable — set SUPABASE_SECRET_KEY",
+      };
+    }
+
+    const tempPassword = parsed.data.temp_password || randomPassword();
+    const { data: authData, error: authError } =
+      await admin.auth.admin.createUser({
+        email: parsed.data.email,
+        password: tempPassword,
+        email_confirm: true,
+        user_metadata: { full_name: parsed.data.full_name },
+        app_metadata: { role: parsed.data.role },
+      });
+
+    if (authError || !authData.user) {
+      return { error: authError?.message ?? "Failed to create auth user" };
+    }
+
+    const role = parsed.data.role;
+    const { error } = await admin.from("app_users").insert({
       id: authData.user.id,
-      full_name: parsed.full_name,
+      full_name: parsed.data.full_name,
       role,
-      vendor_id: role === "super_admin" ? null : (parsed.vendor_id ?? null),
+      vendor_id: role === "super_admin" ? null : (parsed.data.vendor_id ?? null),
       branch_id: ["data_entry", "accountant", "principal"].includes(role)
-        ? (parsed.branch_id ?? null)
+        ? (parsed.data.branch_id ?? null)
         : null,
-      phone: parsed.phone || null,
-      whatsapp_number: parsed.whatsapp_number,
+      phone: parsed.data.phone || null,
+      whatsapp_number: parsed.data.whatsapp_number,
       status: "active",
-    })
-    .select()
-    .single();
+    });
 
-  if (error) {
-    await admin.auth.admin.deleteUser(authData.user.id);
-    return { error: error.message };
+    if (error) {
+      await admin.auth.admin.deleteUser(authData.user.id);
+      return { error: error.message };
+    }
+
+    try {
+      await sendCredentialsWhatsApp({
+        to: parsed.data.whatsapp_number,
+        fullName: parsed.data.full_name,
+        email: parsed.data.email,
+        tempPassword,
+        vendorId: parsed.data.vendor_id,
+      });
+    } catch (waErr) {
+      console.error("[whatsapp]", waErr);
+    }
+
+    revalidatePath("/super-admin");
+    return {
+      ok: true as const,
+      credentials: { email: parsed.data.email, tempPassword },
+    };
+  } catch (err) {
+    console.error("[createAppUserAction]", err);
+    return {
+      error: err instanceof Error ? err.message : "Failed to create user",
+    };
   }
-
-  await sendCredentialsWhatsApp({
-    to: parsed.whatsapp_number,
-    fullName: parsed.full_name,
-    email: parsed.email,
-    tempPassword,
-    vendorId: parsed.vendor_id,
-  });
-
-  return {
-    data,
-    credentials: { email: parsed.email, tempPassword },
-  };
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 
 import { createBranchAction } from "@/actions/admin";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,7 @@ import { Label } from "@/components/ui/label";
 type VendorOption = { id: string; name: string };
 
 export function CreateBranchForm({ vendors }: { vendors: VendorOption[] }) {
+  const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -18,16 +20,29 @@ export function CreateBranchForm({ vendors }: { vendors: VendorOption[] }) {
       className="space-y-3"
       onSubmit={(e) => {
         e.preventDefault();
-        const fd = new FormData(e.currentTarget);
+        const form = e.currentTarget;
+        const fd = new FormData(form);
+        setMessage(null);
         startTransition(async () => {
-          const result = await createBranchAction({
-            vendor_id: String(fd.get("vendor_id") ?? ""),
-            name: String(fd.get("name") ?? ""),
-            address: String(fd.get("address") ?? "") || undefined,
-            contact_phone: String(fd.get("contact_phone") ?? "") || undefined,
-          });
-          setMessage(result.error ? result.error : "Branch created");
-          if (!result.error) e.currentTarget.reset();
+          try {
+            const result = await createBranchAction({
+              vendor_id: String(fd.get("vendor_id") ?? ""),
+              name: String(fd.get("name") ?? ""),
+              address: String(fd.get("address") ?? "") || undefined,
+              contact_phone: String(fd.get("contact_phone") ?? "") || undefined,
+            });
+            if (result.error) {
+              setMessage(result.error);
+              return;
+            }
+            setMessage("Branch created");
+            form.reset();
+            router.refresh();
+          } catch (err) {
+            setMessage(
+              err instanceof Error ? err.message : "Unexpected error creating branch",
+            );
+          }
         });
       }}
     >
@@ -59,7 +74,13 @@ export function CreateBranchForm({ vendors }: { vendors: VendorOption[] }) {
         <Label htmlFor="address">Address</Label>
         <Input id="address" name="address" />
       </div>
-      {message ? <p className="text-sm text-[#2f4a3f]">{message}</p> : null}
+      {message ? (
+        <p
+          className={`text-sm ${message.includes("created") ? "text-[#2f4a3f]" : "text-red-700"}`}
+        >
+          {message}
+        </p>
+      ) : null}
       <Button type="submit" disabled={pending} className="bg-[#0b3d2e]">
         {pending ? "Saving…" : "Create branch"}
       </Button>
