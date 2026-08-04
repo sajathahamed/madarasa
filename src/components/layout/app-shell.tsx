@@ -47,7 +47,8 @@ export function AppShell({
               Madarasa
             </p>
             <p className="text-xs text-[#5a6f65]">
-              {profile.full_name} · {profile.role.replace("_", " ")}
+              {profile.full_name} ·{" "}
+              {(profile.role ?? "unknown").replaceAll("_", " ")}
             </p>
           </div>
           <form action={logoutAction}>

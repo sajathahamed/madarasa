@@ -16,8 +16,8 @@ const studentSchema = z.object({
   guardian_phone: z.string().min(8),
   address: z.string().optional(),
   monthly_amount: z.coerce.number().min(0),
-  is_free: z.boolean().default(false),
-  discount_percent: z.coerce.number().min(0).max(100).default(0),
+  is_free: z.boolean().optional().default(false),
+  discount_percent: z.coerce.number().min(0).max(100).optional().default(0),
   blood_group: z.string().optional(),
   allergies: z.string().optional(),
   medical_conditions: z.string().optional(),
@@ -32,71 +32,92 @@ async function requireProfile() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) throw new Error("Unauthorized");
+  if (!user) return { error: "Unauthorized" as const };
 
   const { data: profile } = await supabase
     .from("app_users")
     .select("*")
     .eq("id", user.id)
-    .single();
+    .maybeSingle();
 
-  if (!profile || profile.status !== "active") throw new Error("Forbidden");
+  if (!profile || profile.status !== "active") {
+    return { error: "Forbidden" as const };
+  }
   return { supabase, user, profile };
 }
 
 export async function createStudentAction(input: z.infer<typeof studentSchema>) {
-  const { supabase, user, profile } = await requireProfile();
-  if (!["super_admin", "vendor_admin", "data_entry"].includes(profile.role)) {
-    return { error: "Forbidden" };
+  try {
+    const auth = await requireProfile();
+    if ("error" in auth) return { error: auth.error };
+
+    if (!["super_admin", "vendor_admin", "data_entry"].includes(auth.profile.role)) {
+      return { error: "Forbidden" };
+    }
+
+    const parsed = studentSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        error: parsed.error.issues.map((i) => i.message).join("; "),
+      };
+    }
+
+    const { data: student, error } = await auth.supabase
+      .from("students")
+      .insert({
+        vendor_id: parsed.data.vendor_id,
+        branch_id: parsed.data.branch_id,
+        admission_no: parsed.data.admission_no,
+        full_name: parsed.data.full_name,
+        dob: parsed.data.dob || null,
+        gender: parsed.data.gender || null,
+        guardian_name: parsed.data.guardian_name,
+        guardian_phone: parsed.data.guardian_phone,
+        address: parsed.data.address || null,
+        created_by: auth.user.id,
+      })
+      .select()
+      .single();
+
+    if (error || !student) {
+      return { error: error?.message ?? "Student create failed" };
+    }
+
+    const [{ error: healthError }, { error: planError }] = await Promise.all([
+      auth.supabase.from("student_health_info").insert({
+        student_id: student.id,
+        blood_group: parsed.data.blood_group || null,
+        allergies: parsed.data.allergies || null,
+        medical_conditions: parsed.data.medical_conditions || null,
+        current_medications: parsed.data.current_medications || null,
+        emergency_contact_name: parsed.data.emergency_contact_name || null,
+        emergency_contact_phone: parsed.data.emergency_contact_phone || null,
+        notes: parsed.data.notes || null,
+      }),
+      auth.supabase.from("student_fee_plans").insert({
+        student_id: student.id,
+        monthly_amount: parsed.data.is_free ? 0 : parsed.data.monthly_amount,
+        is_free: parsed.data.is_free,
+        discount_percent: parsed.data.discount_percent,
+        is_current: true,
+      }),
+    ]);
+
+    if (healthError || planError) {
+      await auth.supabase.from("students").delete().eq("id", student.id);
+      return {
+        error:
+          healthError?.message ?? planError?.message ?? "Related insert failed",
+      };
+    }
+
+    return { data: student };
+  } catch (err) {
+    console.error("[createStudentAction]", err);
+    return {
+      error: err instanceof Error ? err.message : "Failed to create student",
+    };
   }
-
-  const parsed = studentSchema.parse(input);
-
-  const { data: student, error } = await supabase
-    .from("students")
-    .insert({
-      vendor_id: parsed.vendor_id,
-      branch_id: parsed.branch_id,
-      admission_no: parsed.admission_no,
-      full_name: parsed.full_name,
-      dob: parsed.dob || null,
-      gender: parsed.gender || null,
-      guardian_name: parsed.guardian_name,
-      guardian_phone: parsed.guardian_phone,
-      address: parsed.address || null,
-      created_by: user.id,
-    })
-    .select()
-    .single();
-
-  if (error || !student) return { error: error?.message ?? "Student create failed" };
-
-  const [{ error: healthError }, { error: planError }] = await Promise.all([
-    supabase.from("student_health_info").insert({
-      student_id: student.id,
-      blood_group: parsed.blood_group || null,
-      allergies: parsed.allergies || null,
-      medical_conditions: parsed.medical_conditions || null,
-      current_medications: parsed.current_medications || null,
-      emergency_contact_name: parsed.emergency_contact_name || null,
-      emergency_contact_phone: parsed.emergency_contact_phone || null,
-      notes: parsed.notes || null,
-    }),
-    supabase.from("student_fee_plans").insert({
-      student_id: student.id,
-      monthly_amount: parsed.is_free ? 0 : parsed.monthly_amount,
-      is_free: parsed.is_free,
-      discount_percent: parsed.discount_percent,
-      is_current: true,
-    }),
-  ]);
-
-  if (healthError || planError) {
-    await supabase.from("students").delete().eq("id", student.id);
-    return { error: healthError?.message ?? planError?.message ?? "Related insert failed" };
-  }
-
-  return { data: student };
 }
 
 const paymentSchema = z.object({
@@ -108,38 +129,46 @@ const paymentSchema = z.object({
 });
 
 export async function recordPaymentAction(input: z.infer<typeof paymentSchema>) {
-  const { supabase, user, profile } = await requireProfile();
-  if (!["super_admin", "vendor_admin", "data_entry"].includes(profile.role)) {
-    return { error: "Forbidden" };
-  }
+  try {
+    const auth = await requireProfile();
+    if ("error" in auth) return { error: auth.error };
+    if (!["super_admin", "vendor_admin", "data_entry"].includes(auth.profile.role)) {
+      return { error: "Forbidden" };
+    }
 
-  const parsed = paymentSchema.parse(input);
-  const { data: student } = await supabase
-    .from("students")
-    .select("id, vendor_id, branch_id")
-    .eq("id", parsed.student_id)
-    .single();
+    const parsed = paymentSchema.safeParse(input);
+    if (!parsed.success) {
+      return { error: parsed.error.issues.map((i) => i.message).join("; ") };
+    }
 
-  if (!student) return { error: "Student not found" };
+    const { data: student } = await auth.supabase
+      .from("students")
+      .select("id, vendor_id, branch_id")
+      .eq("id", parsed.data.student_id)
+      .maybeSingle();
 
-  const { data, error } = await supabase
-    .from("payments")
-    .insert({
+    if (!student) return { error: "Student not found" };
+
+    const { error } = await auth.supabase.from("payments").insert({
       vendor_id: student.vendor_id,
       branch_id: student.branch_id,
       student_id: student.id,
-      fee_due_id: parsed.fee_due_id || null,
-      amount: parsed.amount,
-      method: parsed.method as PaymentMethod,
-      bank_reference: parsed.bank_reference || null,
-      recorded_by: user.id,
+      fee_due_id: parsed.data.fee_due_id || null,
+      amount: parsed.data.amount,
+      method: parsed.data.method as PaymentMethod,
+      bank_reference: parsed.data.bank_reference || null,
+      recorded_by: auth.user.id,
       status: "pending_accountant" as ApprovalStatus,
-    })
-    .select()
-    .single();
+    });
 
-  if (error) return { error: error.message };
-  return { data };
+    if (error) return { error: error.message };
+    return { ok: true as const };
+  } catch (err) {
+    console.error("[recordPaymentAction]", err);
+    return {
+      error: err instanceof Error ? err.message : "Failed to record payment",
+    };
+  }
 }
 
 const donationSchema = z.object({
@@ -153,30 +182,42 @@ const donationSchema = z.object({
 });
 
 export async function recordDonationAction(input: z.infer<typeof donationSchema>) {
-  const { supabase, user, profile } = await requireProfile();
-  if (!["super_admin", "vendor_admin", "data_entry"].includes(profile.role)) {
-    return { error: "Forbidden" };
-  }
+  try {
+    const auth = await requireProfile();
+    if ("error" in auth) return { error: auth.error };
+    if (!["super_admin", "vendor_admin", "data_entry"].includes(auth.profile.role)) {
+      return { error: "Forbidden" };
+    }
 
-  const parsed = donationSchema.parse(input);
-  const { data, error } = await supabase
-    .from("donations")
-    .insert({
-      vendor_id: parsed.vendor_id,
-      branch_id: parsed.branch_id,
-      donor_name: parsed.donor_name,
-      donor_phone: parsed.donor_phone || null,
-      amount: parsed.amount,
-      type: parsed.type as DonationType,
-      bank_reference: parsed.bank_reference || null,
-      received_by: user.id,
+    const parsed = donationSchema.safeParse(input);
+    if (!parsed.success) {
+      return { error: parsed.error.issues.map((i) => i.message).join("; ") };
+    }
+
+    if (!parsed.data.branch_id) {
+      return { error: "Select a branch before recording a donation." };
+    }
+
+    const { error } = await auth.supabase.from("donations").insert({
+      vendor_id: parsed.data.vendor_id,
+      branch_id: parsed.data.branch_id,
+      donor_name: parsed.data.donor_name,
+      donor_phone: parsed.data.donor_phone || null,
+      amount: parsed.data.amount,
+      type: parsed.data.type as DonationType,
+      bank_reference: parsed.data.bank_reference || null,
+      received_by: auth.user.id,
       status: "pending_accountant" as ApprovalStatus,
-    })
-    .select()
-    .single();
+    });
 
-  if (error) return { error: error.message };
-  return { data };
+    if (error) return { error: error.message };
+    return { ok: true as const };
+  } catch (err) {
+    console.error("[recordDonationAction]", err);
+    return {
+      error: err instanceof Error ? err.message : "Failed to record donation",
+    };
+  }
 }
 
 const approvalSchema = z.object({
@@ -189,79 +230,101 @@ const approvalSchema = z.object({
 export async function reviewTransactionAction(
   input: z.infer<typeof approvalSchema>,
 ) {
-  const { supabase, user, profile } = await requireProfile();
-  const parsed = approvalSchema.parse(input);
-  const table = parsed.kind === "payment" ? "payments" : "donations";
+  try {
+    const auth = await requireProfile();
+    if ("error" in auth) return { error: auth.error };
 
-  const { data: row } = await supabase
-    .from(table)
-    .select("*")
-    .eq("id", parsed.id)
-    .single();
-
-  if (!row) return { error: "Record not found" };
-
-  const now = new Date().toISOString();
-
-  if (profile.role === "accountant" && row.status === "pending_accountant") {
-    const nextStatus: ApprovalStatus =
-      parsed.decision === "approve" ? "pending_principal" : "rejected";
-    const { error } = await supabase
-      .from(table)
-      .update({
-        status: nextStatus,
-        accountant_id: user.id,
-        accountant_action_at: now,
-        accountant_remarks: parsed.remarks || null,
-      })
-      .eq("id", parsed.id);
-    if (error) return { error: error.message };
-    return { data: { status: nextStatus } };
-  }
-
-  if (profile.role === "principal" && row.status === "pending_principal") {
-    const nextStatus: ApprovalStatus =
-      parsed.decision === "approve" ? "approved" : "rejected";
-    const { error } = await supabase
-      .from(table)
-      .update({
-        status: nextStatus,
-        principal_id: user.id,
-        principal_action_at: now,
-        principal_remarks: parsed.remarks || null,
-      })
-      .eq("id", parsed.id);
-    if (error) return { error: error.message };
-
-    // On principal approve, ledger trigger posts atomically.
-    // Guardian WhatsApp confirmation fires only after approval (default).
-    if (
-      nextStatus === "approved" &&
-      parsed.kind === "payment" &&
-      process.env.PAYMENT_CONFIRM_ON_APPROVAL_ONLY !== "false"
-    ) {
-      const { data: student } = await supabase
-        .from("students")
-        .select("full_name, guardian_phone, vendor_id, id")
-        .eq("id", (row as { student_id: string }).student_id)
-        .maybeSingle();
-
-      if (student?.guardian_phone) {
-        const { sendPaymentConfirmationWhatsApp } = await import(
-          "@/lib/whatsapp"
-        );
-        await sendPaymentConfirmationWhatsApp({
-          to: student.guardian_phone,
-          studentName: student.full_name,
-          amount: String((row as { amount: number }).amount),
-          vendorId: student.vendor_id,
-          studentId: student.id,
-        });
-      }
+    const parsed = approvalSchema.safeParse(input);
+    if (!parsed.success) {
+      return { error: parsed.error.issues.map((i) => i.message).join("; ") };
     }
 
-    return { data: { status: nextStatus } };
-  }
+    const table = parsed.data.kind === "payment" ? "payments" : "donations";
+    const { data: row } = await auth.supabase
+      .from(table)
+      .select("*")
+      .eq("id", parsed.data.id)
+      .maybeSingle();
 
-  return { error: "You cannot act on this record in its current status" };
+    if (!row) return { error: "Record not found" };
+
+    const now = new Date().toISOString();
+    const canActAsAccountant =
+      auth.profile.role === "accountant" ||
+      auth.profile.role === "vendor_admin" ||
+      auth.profile.role === "super_admin";
+    const canActAsPrincipal =
+      auth.profile.role === "principal" ||
+      auth.profile.role === "vendor_admin" ||
+      auth.profile.role === "super_admin";
+
+    if (canActAsAccountant && row.status === "pending_accountant") {
+      const nextStatus: ApprovalStatus =
+        parsed.data.decision === "approve" ? "pending_principal" : "rejected";
+      const { error } = await auth.supabase
+        .from(table)
+        .update({
+          status: nextStatus,
+          accountant_id: auth.user.id,
+          accountant_action_at: now,
+          accountant_remarks: parsed.data.remarks || null,
+        })
+        .eq("id", parsed.data.id);
+      if (error) return { error: error.message };
+      return { data: { status: nextStatus } };
+    }
+
+    if (canActAsPrincipal && row.status === "pending_principal") {
+      const nextStatus: ApprovalStatus =
+        parsed.data.decision === "approve" ? "approved" : "rejected";
+      const { error } = await auth.supabase
+        .from(table)
+        .update({
+          status: nextStatus,
+          principal_id: auth.user.id,
+          principal_action_at: now,
+          principal_remarks: parsed.data.remarks || null,
+        })
+        .eq("id", parsed.data.id);
+      if (error) return { error: error.message };
+
+      if (
+        nextStatus === "approved" &&
+        parsed.data.kind === "payment" &&
+        process.env.PAYMENT_CONFIRM_ON_APPROVAL_ONLY !== "false"
+      ) {
+        const { data: student } = await auth.supabase
+          .from("students")
+          .select("full_name, guardian_phone, vendor_id, id")
+          .eq("id", (row as { student_id: string }).student_id)
+          .maybeSingle();
+
+        if (student?.guardian_phone) {
+          try {
+            const { sendPaymentConfirmationWhatsApp } = await import(
+              "@/lib/whatsapp"
+            );
+            await sendPaymentConfirmationWhatsApp({
+              to: student.guardian_phone,
+              studentName: student.full_name,
+              amount: String((row as { amount: number }).amount),
+              vendorId: student.vendor_id,
+              studentId: student.id,
+            });
+          } catch (waErr) {
+            console.error("[payment whatsapp]", waErr);
+          }
+        }
+      }
+
+      return { data: { status: nextStatus } };
+    }
+
+    return { error: "You cannot act on this record in its current status" };
+  } catch (err) {
+    console.error("[reviewTransactionAction]", err);
+    return {
+      error: err instanceof Error ? err.message : "Failed to review transaction",
+    };
+  }
 }

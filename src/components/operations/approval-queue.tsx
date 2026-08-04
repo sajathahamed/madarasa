@@ -70,8 +70,7 @@ export function ApprovalQueue({
               (role === "accountant" && p.status === "pending_accountant") ||
               (role === "principal" && p.status === "pending_principal") ||
               role === "super_admin" ||
-              (role === "vendor_admin" &&
-                process.env.NEXT_PUBLIC_VENDOR_ADMIN_CAN_APPROVE === "true");
+              role === "vendor_admin";
 
             return (
               <div
@@ -122,7 +121,8 @@ export function ApprovalQueue({
             const canAct =
               (role === "accountant" && d.status === "pending_accountant") ||
               (role === "principal" && d.status === "pending_principal") ||
-              role === "super_admin";
+              role === "super_admin" ||
+              role === "vendor_admin";
 
             return (
               <div
