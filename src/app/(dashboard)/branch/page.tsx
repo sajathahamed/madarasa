@@ -44,6 +44,11 @@ export default async function BranchOverviewPage() {
   ]);
 
   const links = [
+    {
+      href: "/branch/accountant",
+      title: "Accountant desk",
+      desc: "Approvals, carry-forward dues, reminders",
+    },
     { href: "/branch/students", title: "Students", desc: "Directory, profiles, fee plans" },
     { href: "/branch/fees", title: "Fees", desc: "Record payments, overdue, reminders" },
     { href: "/branch/approvals", title: "Approvals", desc: "Accountant → Principal queue" },

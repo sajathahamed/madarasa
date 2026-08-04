@@ -62,6 +62,8 @@ export default async function StudentDetailPage({
           total_due: Number(d.total_due),
           amount_paid: Number(d.amount_paid),
           status: d.status,
+          month_amount: Number(d.month_amount),
+          carried_forward: Number(d.carried_forward),
         }))}
         payments={(payments ?? []).map((p) => ({
           id: p.id,

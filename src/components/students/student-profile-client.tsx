@@ -56,6 +56,8 @@ type Due = {
   total_due: number;
   amount_paid: number;
   status: string;
+  month_amount?: number;
+  carried_forward?: number;
 };
 
 type Payment = {
@@ -365,6 +367,9 @@ export function StudentProfileClient({
                 >
                   <span>
                     {d.due_month}/{d.due_year} · {d.status}
+                    {d.carried_forward
+                      ? ` · carried ${formatMoney(d.carried_forward)}`
+                      : ""}
                   </span>
                   <span>
                     {formatMoney(Number(d.amount_paid))} /{" "}

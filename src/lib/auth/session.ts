@@ -55,17 +55,35 @@ export function canLogProgress(role: string) {
 }
 
 export function opsNav(profile: AppUser) {
-  const items = [
-    { href: "/branch", label: "Overview" },
-    { href: "/branch/students", label: "Students" },
-    { href: "/branch/fees", label: "Fees" },
-    { href: "/branch/approvals", label: "Approvals" },
-    { href: "/branch/donations", label: "Donations" },
-    { href: "/branch/classes", label: "Classes" },
-    { href: "/branch/attendance", label: "Attendance" },
-    { href: "/branch/progress", label: "Progress" },
-    { href: "/branch/reports", label: "Reports" },
-  ];
+  const isMoneyRole = ["accountant", "principal", "vendor_admin", "super_admin"].includes(
+    profile.role,
+  );
+
+  const items =
+    profile.role === "accountant"
+      ? [
+          { href: "/branch/accountant", label: "Accountant desk" },
+          { href: "/branch/fees", label: "Record payment" },
+          { href: "/branch/approvals", label: "All approvals" },
+          { href: "/branch/students", label: "Students" },
+          { href: "/branch/reports", label: "Reports" },
+          { href: "/branch", label: "Overview" },
+        ]
+      : [
+          { href: "/branch", label: "Overview" },
+          ...(isMoneyRole
+            ? [{ href: "/branch/accountant", label: "Accountant desk" }]
+            : []),
+          { href: "/branch/students", label: "Students" },
+          { href: "/branch/fees", label: "Fees" },
+          { href: "/branch/approvals", label: "Approvals" },
+          { href: "/branch/donations", label: "Donations" },
+          { href: "/branch/classes", label: "Classes" },
+          { href: "/branch/attendance", label: "Attendance" },
+          { href: "/branch/progress", label: "Progress" },
+          { href: "/branch/reports", label: "Reports" },
+        ];
+
   if (profile.role === "vendor_admin") {
     items.push({ href: "/vendor", label: "Vendor" });
   }

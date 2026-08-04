@@ -15,8 +15,8 @@ const ROLE_HOME: Record<UserRole, string> = {
   super_admin: "/super-admin",
   vendor_admin: "/vendor",
   data_entry: "/branch",
-  accountant: "/branch",
-  principal: "/branch",
+  accountant: "/branch/accountant",
+  principal: "/branch/accountant",
 };
 
 export type LoginResult =

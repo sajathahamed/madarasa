@@ -29,6 +29,8 @@ type Due = {
   due_month: number;
   due_year: number;
   status: string;
+  month_amount?: number;
+  carried_forward?: number;
   student_name?: string;
 };
 
@@ -152,8 +154,11 @@ export function FeesOfficeClient({
                         {d.student_name || d.student_id.slice(0, 8)}
                       </Link>
                       <p className="text-[#5a6f65]">
-                        {d.due_month}/{d.due_year} · {d.status} · due{" "}
-                        {formatMoney(bal)}
+                        {d.due_month}/{d.due_year} · {d.status}
+                        {d.carried_forward
+                          ? ` · carried ${formatMoney(d.carried_forward)}`
+                          : ""}{" "}
+                        · due {formatMoney(bal)}
                       </p>
                     </div>
                     {canRemind ? (

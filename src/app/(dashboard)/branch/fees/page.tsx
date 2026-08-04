@@ -14,7 +14,7 @@ export default async function FeesPage() {
   let duesQ = supabase
     .from("fee_dues")
     .select(
-      "id, student_id, total_due, amount_paid, due_month, due_year, status",
+      "id, student_id, total_due, amount_paid, due_month, due_year, status, month_amount, carried_forward",
     )
     .neq("status", "paid")
     .order("due_year", { ascending: false })
@@ -73,6 +73,8 @@ export default async function FeesPage() {
           due_month: d.due_month,
           due_year: d.due_year,
           status: d.status,
+          month_amount: Number(d.month_amount),
+          carried_forward: Number(d.carried_forward),
           student_name: nameById.get(d.student_id),
         }))}
         canGenerate={canGenerate}
