@@ -3,7 +3,7 @@
 import { z } from "zod";
 
 import { canLogProgress, requireProfile } from "@/lib/auth/session";
-import { sendProgressNoteWhatsApp } from "@/lib/whatsapp";
+import { notifyProgress } from "@/lib/notify";
 
 const progressSchema = z.object({
   student_id: z.string().uuid(),
@@ -58,7 +58,7 @@ export async function logIslamicProgressAction(
     if (error) return { error: error.message };
 
     if (parsed.data.notify_parent && student.guardian_phone) {
-      await sendProgressNoteWhatsApp({
+      await notifyProgress({
         to: student.guardian_phone,
         studentName: student.full_name,
         stream: parsed.data.stream,

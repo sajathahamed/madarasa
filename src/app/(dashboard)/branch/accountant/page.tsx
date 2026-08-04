@@ -126,7 +126,11 @@ export default async function AccountantDeskPage() {
   );
 
   return (
-    <OpsShell profile={profile} title="Accountant desk">
+    <OpsShell
+      profile={profile}
+      title="Accountant desk"
+      subtitle="Approvals · carry-forward · collection"
+    >
       <AccountantDeskClient
         role={profile.role}
         pendingPayments={(payments ?? []).map((p) => ({

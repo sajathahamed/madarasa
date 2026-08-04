@@ -5,9 +5,9 @@ import { z } from "zod";
 import { canEnterData, requireProfile } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
-  sendPaymentReminderWhatsApp,
-  sendAbsenceAlertWhatsApp,
-} from "@/lib/whatsapp";
+  notifyAbsence,
+  notifyPaymentReminder,
+} from "@/lib/notify";
 
 const updateStudentSchema = z.object({
   id: z.string().uuid(),
@@ -186,7 +186,7 @@ export async function sendFeeReminderAction(dueId: string) {
     if (!student?.guardian_phone) return { error: "No guardian phone" };
 
     const outstanding = Number(due.total_due) - Number(due.amount_paid);
-    await sendPaymentReminderWhatsApp({
+    await notifyPaymentReminder({
       to: student.guardian_phone,
       studentName: student.full_name,
       amount: String(outstanding.toFixed(2)),
@@ -248,7 +248,7 @@ export async function notifyAbsenceAction(opts: {
 
     if (!student?.guardian_phone) return { error: "No guardian phone" };
 
-    await sendAbsenceAlertWhatsApp({
+    await notifyAbsence({
       to: student.guardian_phone,
       studentName: student.full_name,
       date: opts.sessionDate,

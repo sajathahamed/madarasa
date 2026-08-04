@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatDate, formatMoney } from "@/lib/format";
 import { AppShell } from "@/components/layout/app-shell";
 import { EmptyRow, PanelTable } from "@/components/layout/panel-table";
+import { DashboardHero, StatCard } from "@/components/dashboard/ui";
 import {
   Card,
   CardContent,
@@ -16,6 +17,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { CreateUserForm } from "@/components/admin/create-user-form";
 import { CreateBranchForm } from "@/components/admin/create-branch-form";
 import { ToggleUserStatusButton } from "@/components/admin/status-toggles";
+import { notificationStatus } from "@/lib/notify";
 
 export default async function VendorDashboardPage() {
   const supabase = await createClient();
@@ -169,75 +171,65 @@ export default async function VendorDashboardPage() {
     <AppShell
       profile={profile!}
       title={vendor?.name ?? "Vendor dashboard"}
+      subtitle="Your madrasa command centre"
       nav={[
         { href: "/vendor", label: "Overview" },
         { href: "/vendor#staff", label: "Staff" },
         { href: "/branch/students", label: "Students" },
         { href: "/vendor#finance", label: "Finance" },
         { href: "/branch", label: "Branch ops" },
+        { href: "/branch/accountant", label: "Accountant" },
         { href: "/branch/reports", label: "Reports" },
       ]}
     >
-      <p className="mb-6 text-sm text-[#5a6f65]">
-        Full visibility for your madrasa · Currency{" "}
-        {process.env.NEXT_PUBLIC_CURRENCY ?? "LKR"}
-        {vendor?.status ? (
-          <>
-            {" "}
-            · Status <StatusBadge value={vendor.status} />
-          </>
-        ) : null}
-      </p>
+      <DashboardHero
+        eyebrow={vendor?.status === "active" ? "Active madrasa" : "Madrasa"}
+        arabic="ٱهْدِنَا ٱلصِّرَٰطَ ٱلْمُسْتَقِيمَ"
+        title={vendor?.name ?? "Vendor dashboard"}
+        subtitle={`Full visibility for students, staff, fees, and ledger · ${process.env.NEXT_PUBLIC_CURRENCY ?? "LKR"}${notificationStatus().dialogConfigured ? " · Dialog SMS ready" : " · SMS ready when Dialog creds arrive"}`}
+      />
 
       <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Active students</CardDescription>
-            <CardTitle className="text-3xl">{students ?? 0}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Staff</CardDescription>
-            <CardTitle className="text-3xl">{staffCount ?? 0}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Outstanding dues</CardDescription>
-            <CardTitle className="text-xl">{formatMoney(outstanding)}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Pending payments</CardDescription>
-            <CardTitle className="text-3xl">{pendingPayments ?? 0}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Pending donations</CardDescription>
-            <CardTitle className="text-3xl">{pendingDonations ?? 0}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Approved payments</CardDescription>
-            <CardTitle className="text-3xl">{approvedPayments ?? 0}</CardTitle>
-          </CardHeader>
-        </Card>
+        <StatCard label="Active students" value={students ?? 0} accent="emerald" />
+        <StatCard label="Staff" value={staffCount ?? 0} accent="stone" />
+        <StatCard
+          label="Outstanding dues"
+          value={formatMoney(outstanding)}
+          accent="amber"
+        />
+        <StatCard
+          label="Pending payments"
+          value={pendingPayments ?? 0}
+          accent="sky"
+        />
+        <StatCard
+          label="Pending donations"
+          value={pendingDonations ?? 0}
+          accent="rose"
+        />
+        <StatCard
+          label="Approved payments"
+          value={approvedPayments ?? 0}
+          accent="emerald"
+        />
       </div>
 
-      <div className="mb-4 flex flex-wrap gap-3 text-sm">
+      <div className="mb-6 flex flex-wrap gap-3 text-sm">
         <Link
-          href="/branch/students"
-          className="rounded-md bg-[#0b3d2e] px-3 py-2 text-[#f7faf8]"
+          href="/branch"
+          className="rounded-full bg-[#0b3d2e] px-4 py-2 text-[#f7faf8]"
         >
-          Open branch operations
+          Open branch dashboard
+        </Link>
+        <Link
+          href="/branch/accountant"
+          className="rounded-full border border-[#0b3d2e]/25 px-4 py-2 text-[#0b3d2e]"
+        >
+          Accountant desk
         </Link>
         <a
           href="#create-staff"
-          className="rounded-md border border-[#0b3d2e]/30 px-3 py-2 text-[#0b3d2e]"
+          className="rounded-full border border-[#0b3d2e]/25 px-4 py-2 text-[#0b3d2e]"
         >
           Add staff
         </a>

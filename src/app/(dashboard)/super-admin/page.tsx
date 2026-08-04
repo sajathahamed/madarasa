@@ -5,6 +5,10 @@ import { formatDate, formatMoney } from "@/lib/format";
 import { AppShell } from "@/components/layout/app-shell";
 import { EmptyRow, PanelTable } from "@/components/layout/panel-table";
 import {
+  DashboardHero,
+  StatCard,
+} from "@/components/dashboard/ui";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -19,6 +23,7 @@ import {
   ToggleUserStatusButton,
   ToggleVendorStatusButton,
 } from "@/components/admin/status-toggles";
+import { notificationStatus } from "@/lib/notify";
 
 function mapById<T extends { id: string }>(rows: T[] | null | undefined) {
   return new Map((rows ?? []).map((r) => [r.id, r]));
@@ -94,11 +99,13 @@ export default async function SuperAdminPage() {
   const vendorMap = mapById(vendors);
   const branchMap = mapById(branches);
   const studentMap = mapById(students);
+  const notify = notificationStatus();
 
   return (
     <AppShell
       profile={profile!}
       title="Platform control"
+      subtitle="Multi-tenant madrasa network"
       nav={[
         { href: "/super-admin", label: "Dashboard" },
         { href: "/super-admin#users-list", label: "Users" },
@@ -107,37 +114,23 @@ export default async function SuperAdminPage() {
         { href: "/super-admin#create", label: "Create" },
       ]}
     >
+      <DashboardHero
+        eyebrow="Super Admin"
+        arabic="وَقُل رَّبِّ زِدْنِي عِلْمًا"
+        title="Platform control centre"
+        subtitle={`Oversee every vendor, branch, and approval. Notify via ${notify.channels.join(" + ")}${notify.dialogConfigured ? " · Dialog SMS ready" : " · add Dialog SMS creds when ready"}.`}
+      />
+
       <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Vendors</CardDescription>
-            <CardTitle className="text-3xl">{vendorCount ?? 0}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Branches</CardDescription>
-            <CardTitle className="text-3xl">{branchCount ?? 0}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Users</CardDescription>
-            <CardTitle className="text-3xl">{userCount ?? 0}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Students</CardDescription>
-            <CardTitle className="text-3xl">{studentCount ?? 0}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Pending payments</CardDescription>
-            <CardTitle className="text-3xl">{pendingApprovals ?? 0}</CardTitle>
-          </CardHeader>
-        </Card>
+        <StatCard label="Vendors" value={vendorCount ?? 0} accent="emerald" />
+        <StatCard label="Branches" value={branchCount ?? 0} accent="sky" />
+        <StatCard label="Users" value={userCount ?? 0} accent="stone" />
+        <StatCard label="Students" value={studentCount ?? 0} accent="amber" />
+        <StatCard
+          label="Pending payments"
+          value={pendingApprovals ?? 0}
+          accent="rose"
+        />
       </div>
 
       <PanelTable

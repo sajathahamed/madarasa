@@ -282,10 +282,8 @@ export async function reviewTransactionAction(
 
         if (student?.guardian_phone) {
           try {
-            const { sendPaymentConfirmationWhatsApp } = await import(
-              "@/lib/whatsapp"
-            );
-            await sendPaymentConfirmationWhatsApp({
+            const { notifyPaymentConfirmation } = await import("@/lib/notify");
+            await notifyPaymentConfirmation({
               to: student.guardian_phone,
               studentName: student.full_name,
               amount: String((row as { amount: number }).amount),
@@ -293,7 +291,7 @@ export async function reviewTransactionAction(
               studentId: student.id,
             });
           } catch (waErr) {
-            console.error("[payment whatsapp]", waErr);
+            console.error("[payment notify]", waErr);
           }
         }
       }
