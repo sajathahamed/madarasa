@@ -1,0 +1,581 @@
+export type UserRole =
+  | "super_admin"
+  | "vendor_admin"
+  | "data_entry"
+  | "accountant"
+  | "principal";
+
+export type ApprovalStatus =
+  | "pending_accountant"
+  | "pending_principal"
+  | "approved"
+  | "rejected";
+
+export type PaymentMethod = "cash" | "bank_transfer" | "card" | "online";
+export type DonationType = "cash" | "bank_transfer";
+
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[];
+
+type Tables = {
+  vendors: {
+    Row: {
+      id: string;
+      name: string;
+      address: string | null;
+      contact_phone: string | null;
+      whatsapp_number: string;
+      status: string;
+      created_at: string;
+    };
+    Insert: {
+      id?: string;
+      name: string;
+      address?: string | null;
+      contact_phone?: string | null;
+      whatsapp_number: string;
+      status?: string;
+      created_at?: string;
+    };
+    Update: {
+      id?: string;
+      name?: string;
+      address?: string | null;
+      contact_phone?: string | null;
+      whatsapp_number?: string;
+      status?: string;
+      created_at?: string;
+    };
+    Relationships: [];
+  };
+  branches: {
+    Row: {
+      id: string;
+      vendor_id: string;
+      name: string;
+      address: string | null;
+      contact_phone: string | null;
+      created_at: string;
+    };
+    Insert: {
+      id?: string;
+      vendor_id: string;
+      name: string;
+      address?: string | null;
+      contact_phone?: string | null;
+      created_at?: string;
+    };
+    Update: {
+      id?: string;
+      vendor_id?: string;
+      name?: string;
+      address?: string | null;
+      contact_phone?: string | null;
+      created_at?: string;
+    };
+    Relationships: [];
+  };
+  app_users: {
+    Row: {
+      id: string;
+      vendor_id: string | null;
+      branch_id: string | null;
+      role: UserRole;
+      full_name: string;
+      phone: string | null;
+      whatsapp_number: string | null;
+      status: string;
+      created_at: string;
+    };
+    Insert: {
+      id: string;
+      vendor_id?: string | null;
+      branch_id?: string | null;
+      role: UserRole;
+      full_name: string;
+      phone?: string | null;
+      whatsapp_number?: string | null;
+      status?: string;
+      created_at?: string;
+    };
+    Update: {
+      id?: string;
+      vendor_id?: string | null;
+      branch_id?: string | null;
+      role?: UserRole;
+      full_name?: string;
+      phone?: string | null;
+      whatsapp_number?: string | null;
+      status?: string;
+      created_at?: string;
+    };
+    Relationships: [];
+  };
+  students: {
+    Row: {
+      id: string;
+      vendor_id: string;
+      branch_id: string;
+      admission_no: string;
+      full_name: string;
+      dob: string | null;
+      gender: string | null;
+      guardian_name: string;
+      guardian_phone: string;
+      address: string | null;
+      photo_url: string | null;
+      admission_date: string;
+      status: string;
+      created_by: string | null;
+      created_at: string;
+    };
+    Insert: {
+      id?: string;
+      vendor_id: string;
+      branch_id: string;
+      admission_no: string;
+      full_name: string;
+      dob?: string | null;
+      gender?: string | null;
+      guardian_name: string;
+      guardian_phone: string;
+      address?: string | null;
+      photo_url?: string | null;
+      admission_date?: string;
+      status?: string;
+      created_by?: string | null;
+      created_at?: string;
+    };
+    Update: {
+      id?: string;
+      vendor_id?: string;
+      branch_id?: string;
+      admission_no?: string;
+      full_name?: string;
+      dob?: string | null;
+      gender?: string | null;
+      guardian_name?: string;
+      guardian_phone?: string;
+      address?: string | null;
+      photo_url?: string | null;
+      admission_date?: string;
+      status?: string;
+      created_by?: string | null;
+      created_at?: string;
+    };
+    Relationships: [];
+  };
+  student_health_info: {
+    Row: {
+      student_id: string;
+      blood_group: string | null;
+      allergies: string | null;
+      medical_conditions: string | null;
+      current_medications: string | null;
+      emergency_contact_name: string | null;
+      emergency_contact_phone: string | null;
+      notes: string | null;
+      updated_at: string;
+    };
+    Insert: {
+      student_id: string;
+      blood_group?: string | null;
+      allergies?: string | null;
+      medical_conditions?: string | null;
+      current_medications?: string | null;
+      emergency_contact_name?: string | null;
+      emergency_contact_phone?: string | null;
+      notes?: string | null;
+      updated_at?: string;
+    };
+    Update: {
+      student_id?: string;
+      blood_group?: string | null;
+      allergies?: string | null;
+      medical_conditions?: string | null;
+      current_medications?: string | null;
+      emergency_contact_name?: string | null;
+      emergency_contact_phone?: string | null;
+      notes?: string | null;
+      updated_at?: string;
+    };
+    Relationships: [];
+  };
+  student_fee_plans: {
+    Row: {
+      id: string;
+      student_id: string;
+      monthly_amount: number;
+      is_free: boolean;
+      discount_percent: number;
+      effective_from: string;
+      is_current: boolean;
+    };
+    Insert: {
+      id?: string;
+      student_id: string;
+      monthly_amount?: number;
+      is_free?: boolean;
+      discount_percent?: number;
+      effective_from?: string;
+      is_current?: boolean;
+    };
+    Update: {
+      id?: string;
+      student_id?: string;
+      monthly_amount?: number;
+      is_free?: boolean;
+      discount_percent?: number;
+      effective_from?: string;
+      is_current?: boolean;
+    };
+    Relationships: [];
+  };
+  fee_dues: {
+    Row: {
+      id: string;
+      student_id: string;
+      vendor_id: string;
+      branch_id: string;
+      due_month: number;
+      due_year: number;
+      month_amount: number;
+      carried_forward: number;
+      total_due: number;
+      amount_paid: number;
+      status: string;
+      created_at: string;
+    };
+    Insert: {
+      id?: string;
+      student_id: string;
+      vendor_id: string;
+      branch_id: string;
+      due_month: number;
+      due_year: number;
+      month_amount?: number;
+      carried_forward?: number;
+      total_due?: number;
+      amount_paid?: number;
+      status?: string;
+      created_at?: string;
+    };
+    Update: {
+      id?: string;
+      student_id?: string;
+      vendor_id?: string;
+      branch_id?: string;
+      due_month?: number;
+      due_year?: number;
+      month_amount?: number;
+      carried_forward?: number;
+      total_due?: number;
+      amount_paid?: number;
+      status?: string;
+      created_at?: string;
+    };
+    Relationships: [];
+  };
+  payments: {
+    Row: {
+      id: string;
+      vendor_id: string;
+      branch_id: string;
+      student_id: string;
+      fee_due_id: string | null;
+      amount: number;
+      method: PaymentMethod;
+      bank_reference: string | null;
+      recorded_by: string;
+      status: ApprovalStatus;
+      accountant_id: string | null;
+      accountant_action_at: string | null;
+      accountant_remarks: string | null;
+      principal_id: string | null;
+      principal_action_at: string | null;
+      principal_remarks: string | null;
+      created_at: string;
+    };
+    Insert: {
+      id?: string;
+      vendor_id: string;
+      branch_id: string;
+      student_id: string;
+      fee_due_id?: string | null;
+      amount: number;
+      method: PaymentMethod;
+      bank_reference?: string | null;
+      recorded_by: string;
+      status?: ApprovalStatus;
+      accountant_id?: string | null;
+      accountant_action_at?: string | null;
+      accountant_remarks?: string | null;
+      principal_id?: string | null;
+      principal_action_at?: string | null;
+      principal_remarks?: string | null;
+      created_at?: string;
+    };
+    Update: {
+      id?: string;
+      vendor_id?: string;
+      branch_id?: string;
+      student_id?: string;
+      fee_due_id?: string | null;
+      amount?: number;
+      method?: PaymentMethod;
+      bank_reference?: string | null;
+      recorded_by?: string;
+      status?: ApprovalStatus;
+      accountant_id?: string | null;
+      accountant_action_at?: string | null;
+      accountant_remarks?: string | null;
+      principal_id?: string | null;
+      principal_action_at?: string | null;
+      principal_remarks?: string | null;
+      created_at?: string;
+    };
+    Relationships: [];
+  };
+  donations: {
+    Row: {
+      id: string;
+      vendor_id: string;
+      branch_id: string;
+      donor_name: string;
+      donor_phone: string | null;
+      amount: number;
+      type: DonationType;
+      bank_reference: string | null;
+      received_by: string;
+      status: ApprovalStatus;
+      accountant_id: string | null;
+      accountant_action_at: string | null;
+      accountant_remarks: string | null;
+      principal_id: string | null;
+      principal_action_at: string | null;
+      principal_remarks: string | null;
+      created_at: string;
+    };
+    Insert: {
+      id?: string;
+      vendor_id: string;
+      branch_id: string;
+      donor_name: string;
+      donor_phone?: string | null;
+      amount: number;
+      type: DonationType;
+      bank_reference?: string | null;
+      received_by: string;
+      status?: ApprovalStatus;
+      accountant_id?: string | null;
+      accountant_action_at?: string | null;
+      accountant_remarks?: string | null;
+      principal_id?: string | null;
+      principal_action_at?: string | null;
+      principal_remarks?: string | null;
+      created_at?: string;
+    };
+    Update: {
+      id?: string;
+      vendor_id?: string;
+      branch_id?: string;
+      donor_name?: string;
+      donor_phone?: string | null;
+      amount?: number;
+      type?: DonationType;
+      bank_reference?: string | null;
+      received_by?: string;
+      status?: ApprovalStatus;
+      accountant_id?: string | null;
+      accountant_action_at?: string | null;
+      accountant_remarks?: string | null;
+      principal_id?: string | null;
+      principal_action_at?: string | null;
+      principal_remarks?: string | null;
+      created_at?: string;
+    };
+    Relationships: [];
+  };
+  accounts: {
+    Row: {
+      id: string;
+      vendor_id: string;
+      branch_id: string | null;
+      name: string;
+      type: string;
+      opening_balance: number;
+      current_balance: number;
+    };
+    Insert: {
+      id?: string;
+      vendor_id: string;
+      branch_id?: string | null;
+      name: string;
+      type: string;
+      opening_balance?: number;
+      current_balance?: number;
+    };
+    Update: {
+      id?: string;
+      vendor_id?: string;
+      branch_id?: string | null;
+      name?: string;
+      type?: string;
+      opening_balance?: number;
+      current_balance?: number;
+    };
+    Relationships: [];
+  };
+  ledger_entries: {
+    Row: {
+      id: string;
+      vendor_id: string;
+      branch_id: string;
+      txn_group_id: string;
+      source_table: string;
+      source_id: string;
+      account_id: string;
+      entry_type: string;
+      amount: number;
+      entry_date: string;
+      created_by: string | null;
+      created_at: string;
+    };
+    Insert: {
+      id?: string;
+      vendor_id: string;
+      branch_id: string;
+      txn_group_id: string;
+      source_table: string;
+      source_id: string;
+      account_id: string;
+      entry_type: string;
+      amount: number;
+      entry_date?: string;
+      created_by?: string | null;
+      created_at?: string;
+    };
+    Update: {
+      id?: string;
+      vendor_id?: string;
+      branch_id?: string;
+      txn_group_id?: string;
+      source_table?: string;
+      source_id?: string;
+      account_id?: string;
+      entry_type?: string;
+      amount?: number;
+      entry_date?: string;
+      created_by?: string | null;
+      created_at?: string;
+    };
+    Relationships: [];
+  };
+  whatsapp_messages: {
+    Row: {
+      id: string;
+      vendor_id: string | null;
+      student_id: string | null;
+      recipient_phone: string;
+      message_type: string;
+      template_name: string | null;
+      status: string;
+      provider_response: Json | null;
+      sent_at: string | null;
+      created_at: string;
+    };
+    Insert: {
+      id?: string;
+      vendor_id?: string | null;
+      student_id?: string | null;
+      recipient_phone: string;
+      message_type: string;
+      template_name?: string | null;
+      status?: string;
+      provider_response?: Json | null;
+      sent_at?: string | null;
+      created_at?: string;
+    };
+    Update: {
+      id?: string;
+      vendor_id?: string | null;
+      student_id?: string | null;
+      recipient_phone?: string;
+      message_type?: string;
+      template_name?: string | null;
+      status?: string;
+      provider_response?: Json | null;
+      sent_at?: string | null;
+      created_at?: string;
+    };
+    Relationships: [];
+  };
+  audit_logs: {
+    Row: {
+      id: string;
+      vendor_id: string | null;
+      user_id: string | null;
+      action: string;
+      table_name: string;
+      record_id: string | null;
+      old_data: Json | null;
+      new_data: Json | null;
+      created_at: string;
+    };
+    Insert: {
+      id?: string;
+      vendor_id?: string | null;
+      user_id?: string | null;
+      action: string;
+      table_name: string;
+      record_id?: string | null;
+      old_data?: Json | null;
+      new_data?: Json | null;
+      created_at?: string;
+    };
+    Update: {
+      id?: string;
+      vendor_id?: string | null;
+      user_id?: string | null;
+      action?: string;
+      table_name?: string;
+      record_id?: string | null;
+      old_data?: Json | null;
+      new_data?: Json | null;
+      created_at?: string;
+    };
+    Relationships: [];
+  };
+};
+
+export type Database = {
+  public: {
+    Tables: Tables;
+    Views: Record<string, never>;
+    Functions: {
+      generate_monthly_fee_dues: {
+        Args: { p_month?: number; p_year?: number };
+        Returns: number;
+      };
+    };
+    Enums: {
+      user_role: UserRole;
+      approval_status: ApprovalStatus;
+      payment_method: PaymentMethod;
+      donation_type: DonationType;
+    };
+    CompositeTypes: Record<string, never>;
+  };
+};
+
+export type AppUser = Tables["app_users"]["Row"];
+export type Vendor = Tables["vendors"]["Row"];
+export type Branch = Tables["branches"]["Row"];
+export type Student = Tables["students"]["Row"];
+export type Payment = Tables["payments"]["Row"];
+export type Donation = Tables["donations"]["Row"];
