@@ -19,41 +19,74 @@ const ROLE_HOME: Record<UserRole, string> = {
   principal: "/branch",
 };
 
-export async function loginAction(formData: FormData) {
-  const parsed = loginSchema.safeParse({
-    email: formData.get("email"),
-    password: formData.get("password"),
-  });
+export type LoginResult =
+  | { error: string; redirectTo?: undefined }
+  | { error?: undefined; redirectTo: string };
 
-  if (!parsed.success) {
-    return { error: "Invalid email or password format" };
+export async function loginAction(formData: FormData): Promise<LoginResult> {
+  try {
+    const parsed = loginSchema.safeParse({
+      email: formData.get("email"),
+      password: formData.get("password"),
+    });
+
+    if (!parsed.success) {
+      return { error: "Invalid email or password format" };
+    }
+
+    if (
+      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+      !(
+        process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      )
+    ) {
+      return {
+        error:
+          "Server is missing Supabase env vars. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY in Vercel.",
+      };
+    }
+
+    const supabase = await createClient();
+    const { error } = await supabase.auth.signInWithPassword(parsed.data);
+
+    if (error) {
+      return { error: error.message };
+    }
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) return { error: "Login failed" };
+
+    const { data: profile, error: profileError } = await supabase
+      .from("app_users")
+      .select("role, status")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      return { error: profileError.message };
+    }
+
+    if (!profile || profile.status !== "active") {
+      await supabase.auth.signOut();
+      return { error: "Account inactive or profile missing" };
+    }
+
+    // Return path for client navigation — do not call redirect() here.
+    // redirect() inside a client-invoked action causes Vercel 500 / React #441.
+    return { redirectTo: ROLE_HOME[profile.role] };
+  } catch (err) {
+    console.error("[loginAction]", err);
+    return {
+      error:
+        err instanceof Error
+          ? err.message
+          : "Unexpected login error. Check server configuration.",
+    };
   }
-
-  const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword(parsed.data);
-
-  if (error) {
-    return { error: error.message };
-  }
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return { error: "Login failed" };
-
-  const { data: profile } = await supabase
-    .from("app_users")
-    .select("role, status")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (!profile || profile.status !== "active") {
-    await supabase.auth.signOut();
-    return { error: "Account inactive or profile missing" };
-  }
-
-  redirect(ROLE_HOME[profile.role]);
 }
 
 export async function logoutAction() {

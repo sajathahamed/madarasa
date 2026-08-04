@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Source_Serif_4, DM_Sans } from "next/font/google";
 
 import { loginAction } from "@/actions/auth";
@@ -20,6 +21,7 @@ const sans = DM_Sans({
 });
 
 export default function LoginPage() {
+  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -58,15 +60,25 @@ export default function LoginPage() {
         </Link>
         <h1 className="text-2xl font-medium text-[#0b3d2e]">Sign in</h1>
         <p className="mt-1 text-sm text-[#5a6f65]">
-          Use the credentials sent to your WhatsApp.
+          Use your platform credentials to continue.
         </p>
 
         <form
           className="mt-8 space-y-4"
-          action={(formData) => {
+          onSubmit={(e) => {
+            e.preventDefault();
+            const formData = new FormData(e.currentTarget);
+            setError(null);
             startTransition(async () => {
               const result = await loginAction(formData);
-              if (result?.error) setError(result.error);
+              if (result.error) {
+                setError(result.error);
+                return;
+              }
+              if (result.redirectTo) {
+                router.push(result.redirectTo);
+                router.refresh();
+              }
             });
           }}
         >
