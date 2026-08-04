@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 
-import { createClient } from "@/lib/supabase/server";
+import { requireProfile } from "@/lib/auth/session";
 import type { ApprovalStatus, PaymentMethod, DonationType } from "@/types/database";
 
 const studentSchema = z.object({
@@ -26,25 +26,6 @@ const studentSchema = z.object({
   emergency_contact_phone: z.string().optional(),
   notes: z.string().optional(),
 });
-
-async function requireProfile() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized" as const };
-
-  const { data: profile } = await supabase
-    .from("app_users")
-    .select("*")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (!profile || profile.status !== "active") {
-    return { error: "Forbidden" as const };
-  }
-  return { supabase, user, profile };
-}
 
 export async function createStudentAction(input: z.infer<typeof studentSchema>) {
   try {

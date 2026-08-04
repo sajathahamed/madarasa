@@ -5,7 +5,9 @@ type WhatsAppMessageType =
   | "credentials"
   | "payment_confirmation"
   | "payment_reminder"
-  | "bulk_reminder";
+  | "bulk_reminder"
+  | "absence_alert"
+  | "progress_note";
 
 type SendTemplateInput = {
   to: string;
@@ -188,6 +190,78 @@ export async function sendPaymentConfirmationWhatsApp(opts: {
     messageType: "payment_confirmation",
     templateName: "payment_confirmation",
     variables: [opts.studentName, opts.amount],
+    vendorId: opts.vendorId,
+    studentId: opts.studentId,
+  });
+}
+
+export async function sendPaymentReminderWhatsApp(opts: {
+  to: string;
+  studentName: string;
+  amount: string;
+  period: string;
+  vendorId?: string | null;
+  studentId?: string | null;
+}) {
+  return sendWhatsAppTemplate({
+    to: opts.to,
+    messageType: "payment_reminder",
+    templateName: "payment_reminder",
+    variables: [opts.studentName, opts.amount, opts.period],
+    vendorId: opts.vendorId,
+    studentId: opts.studentId,
+  });
+}
+
+export async function sendBulkReminderWhatsApp(opts: {
+  to: string;
+  studentName: string;
+  amount: string;
+  vendorId?: string | null;
+  studentId?: string | null;
+}) {
+  return sendWhatsAppTemplate({
+    to: opts.to,
+    messageType: "bulk_reminder",
+    templateName: "bulk_fee_reminder",
+    variables: [opts.studentName, opts.amount],
+    vendorId: opts.vendorId,
+    studentId: opts.studentId,
+  });
+}
+
+export async function sendAbsenceAlertWhatsApp(opts: {
+  to: string;
+  studentName: string;
+  date: string;
+  status: string;
+  vendorId?: string | null;
+  studentId?: string | null;
+}) {
+  return sendWhatsAppTemplate({
+    to: opts.to,
+    messageType: "absence_alert",
+    templateName: "absence_alert",
+    variables: [opts.studentName, opts.date, opts.status],
+    vendorId: opts.vendorId,
+    studentId: opts.studentId,
+  });
+}
+
+export async function sendProgressNoteWhatsApp(opts: {
+  to: string;
+  studentName: string;
+  stream: string;
+  lesson: string;
+  note: string;
+  vendorId?: string | null;
+  studentId?: string | null;
+}) {
+  return sendWhatsAppTemplate({
+    to: opts.to,
+    messageType: "progress_note",
+    templateName: "progress_note",
+    variables: [opts.studentName, opts.stream, opts.lesson, opts.note || "—"],
     vendorId: opts.vendorId,
     studentId: opts.studentId,
   });

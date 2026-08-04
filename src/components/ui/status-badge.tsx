@@ -4,6 +4,8 @@ const STYLES: Record<string, string> = {
   active: "bg-emerald-100 text-emerald-900",
   inactive: "bg-zinc-200 text-zinc-700",
   suspended: "bg-amber-100 text-amber-900",
+  left: "bg-zinc-200 text-zinc-700",
+  graduated: "bg-teal-100 text-teal-900",
   unpaid: "bg-rose-100 text-rose-900",
   partial: "bg-amber-100 text-amber-900",
   paid: "bg-emerald-100 text-emerald-900",

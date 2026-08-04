@@ -13,6 +13,10 @@ export type ApprovalStatus =
 
 export type PaymentMethod = "cash" | "bank_transfer" | "card" | "online";
 export type DonationType = "cash" | "bank_transfer";
+export type AttendanceStatus = "present" | "absent" | "late";
+export type IslamicStream = "qaida" | "nazirah" | "hifz";
+export type HifzComponent = "sabaq" | "sabqi" | "manzil" | "juz";
+export type StudentStatus = "active" | "left" | "graduated";
 
 export type Json =
   | string
@@ -551,6 +555,243 @@ type Tables = {
     };
     Relationships: [];
   };
+  academic_years: {
+    Row: {
+      id: string;
+      vendor_id: string;
+      name: string;
+      starts_on: string;
+      ends_on: string;
+      is_current: boolean;
+      created_at: string;
+    };
+    Insert: {
+      id?: string;
+      vendor_id: string;
+      name: string;
+      starts_on: string;
+      ends_on: string;
+      is_current?: boolean;
+      created_at?: string;
+    };
+    Update: {
+      id?: string;
+      vendor_id?: string;
+      name?: string;
+      starts_on?: string;
+      ends_on?: string;
+      is_current?: boolean;
+      created_at?: string;
+    };
+    Relationships: [];
+  };
+  classes: {
+    Row: {
+      id: string;
+      vendor_id: string;
+      branch_id: string;
+      academic_year_id: string | null;
+      name: string;
+      teacher_id: string | null;
+      schedule_note: string | null;
+      is_active: boolean;
+      created_at: string;
+    };
+    Insert: {
+      id?: string;
+      vendor_id: string;
+      branch_id: string;
+      academic_year_id?: string | null;
+      name: string;
+      teacher_id?: string | null;
+      schedule_note?: string | null;
+      is_active?: boolean;
+      created_at?: string;
+    };
+    Update: {
+      id?: string;
+      vendor_id?: string;
+      branch_id?: string;
+      academic_year_id?: string | null;
+      name?: string;
+      teacher_id?: string | null;
+      schedule_note?: string | null;
+      is_active?: boolean;
+      created_at?: string;
+    };
+    Relationships: [];
+  };
+  class_enrollments: {
+    Row: {
+      id: string;
+      class_id: string;
+      student_id: string;
+      enrolled_at: string;
+      left_at: string | null;
+      is_active: boolean;
+    };
+    Insert: {
+      id?: string;
+      class_id: string;
+      student_id: string;
+      enrolled_at?: string;
+      left_at?: string | null;
+      is_active?: boolean;
+    };
+    Update: {
+      id?: string;
+      class_id?: string;
+      student_id?: string;
+      enrolled_at?: string;
+      left_at?: string | null;
+      is_active?: boolean;
+    };
+    Relationships: [];
+  };
+  attendance_sessions: {
+    Row: {
+      id: string;
+      vendor_id: string;
+      branch_id: string;
+      class_id: string;
+      session_date: string;
+      marked_by: string | null;
+      notes: string | null;
+      created_at: string;
+    };
+    Insert: {
+      id?: string;
+      vendor_id: string;
+      branch_id: string;
+      class_id: string;
+      session_date: string;
+      marked_by?: string | null;
+      notes?: string | null;
+      created_at?: string;
+    };
+    Update: {
+      id?: string;
+      vendor_id?: string;
+      branch_id?: string;
+      class_id?: string;
+      session_date?: string;
+      marked_by?: string | null;
+      notes?: string | null;
+      created_at?: string;
+    };
+    Relationships: [];
+  };
+  attendance_records: {
+    Row: {
+      id: string;
+      session_id: string;
+      student_id: string;
+      status: AttendanceStatus;
+      note: string | null;
+    };
+    Insert: {
+      id?: string;
+      session_id: string;
+      student_id: string;
+      status?: AttendanceStatus;
+      note?: string | null;
+    };
+    Update: {
+      id?: string;
+      session_id?: string;
+      student_id?: string;
+      status?: AttendanceStatus;
+      note?: string | null;
+    };
+    Relationships: [];
+  };
+  islamic_progress_logs: {
+    Row: {
+      id: string;
+      vendor_id: string;
+      branch_id: string;
+      student_id: string;
+      class_id: string | null;
+      stream: IslamicStream;
+      hifz_component: HifzComponent | null;
+      lesson_label: string;
+      pages_or_ayah: string | null;
+      quality_note: string | null;
+      logged_by: string | null;
+      logged_on: string;
+      created_at: string;
+    };
+    Insert: {
+      id?: string;
+      vendor_id: string;
+      branch_id: string;
+      student_id: string;
+      class_id?: string | null;
+      stream: IslamicStream;
+      hifz_component?: HifzComponent | null;
+      lesson_label: string;
+      pages_or_ayah?: string | null;
+      quality_note?: string | null;
+      logged_by?: string | null;
+      logged_on?: string;
+      created_at?: string;
+    };
+    Update: {
+      id?: string;
+      vendor_id?: string;
+      branch_id?: string;
+      student_id?: string;
+      class_id?: string | null;
+      stream?: IslamicStream;
+      hifz_component?: HifzComponent | null;
+      lesson_label?: string;
+      pages_or_ayah?: string | null;
+      quality_note?: string | null;
+      logged_by?: string | null;
+      logged_on?: string;
+      created_at?: string;
+    };
+    Relationships: [];
+  };
+  parent_access_tokens: {
+    Row: {
+      id: string;
+      student_id: string;
+      vendor_id: string;
+      token_hash: string;
+      label: string | null;
+      expires_at: string | null;
+      last_used_at: string | null;
+      created_by: string | null;
+      created_at: string;
+      revoked_at: string | null;
+    };
+    Insert: {
+      id?: string;
+      student_id: string;
+      vendor_id: string;
+      token_hash: string;
+      label?: string | null;
+      expires_at?: string | null;
+      last_used_at?: string | null;
+      created_by?: string | null;
+      created_at?: string;
+      revoked_at?: string | null;
+    };
+    Update: {
+      id?: string;
+      student_id?: string;
+      vendor_id?: string;
+      token_hash?: string;
+      label?: string | null;
+      expires_at?: string | null;
+      last_used_at?: string | null;
+      created_by?: string | null;
+      created_at?: string;
+      revoked_at?: string | null;
+    };
+    Relationships: [];
+  };
 };
 
 export type Database = {
@@ -579,3 +820,6 @@ export type Branch = Tables["branches"]["Row"];
 export type Student = Tables["students"]["Row"];
 export type Payment = Tables["payments"]["Row"];
 export type Donation = Tables["donations"]["Row"];
+export type SchoolClass = Tables["classes"]["Row"];
+export type FeeDue = Tables["fee_dues"]["Row"];
+export type IslamicProgressLog = Tables["islamic_progress_logs"]["Row"];

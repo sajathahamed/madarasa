@@ -12,7 +12,12 @@ const ROLE_HOME: Record<UserRole, string> = {
 };
 
 function isPublicPath(path: string) {
-  return path === "/" || path.startsWith("/login") || path.startsWith("/api/cron");
+  return (
+    path === "/" ||
+    path.startsWith("/login") ||
+    path.startsWith("/parent") ||
+    path.startsWith("/api/cron")
+  );
 }
 
 export async function updateSession(request: NextRequest) {

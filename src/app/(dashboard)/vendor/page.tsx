@@ -172,9 +172,10 @@ export default async function VendorDashboardPage() {
       nav={[
         { href: "/vendor", label: "Overview" },
         { href: "/vendor#staff", label: "Staff" },
-        { href: "/vendor#students", label: "Students" },
+        { href: "/branch/students", label: "Students" },
         { href: "/vendor#finance", label: "Finance" },
         { href: "/branch", label: "Branch ops" },
+        { href: "/branch/reports", label: "Reports" },
       ]}
     >
       <p className="mb-6 text-sm text-[#5a6f65]">
@@ -229,7 +230,7 @@ export default async function VendorDashboardPage() {
 
       <div className="mb-4 flex flex-wrap gap-3 text-sm">
         <Link
-          href="/branch"
+          href="/branch/students"
           className="rounded-md bg-[#0b3d2e] px-3 py-2 text-[#f7faf8]"
         >
           Open branch operations
@@ -291,8 +292,8 @@ export default async function VendorDashboardPage() {
         {(recentStudents ?? []).length === 0 ? (
           <EmptyRow colSpan={7}>
             No students yet. Add them from{" "}
-            <Link href="/branch" className="underline">
-              Branch ops
+            <Link href="/branch/students" className="underline">
+              Students
             </Link>
             .
           </EmptyRow>
