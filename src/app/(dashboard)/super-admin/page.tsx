@@ -23,7 +23,9 @@ import {
   ToggleUserStatusButton,
   ToggleVendorStatusButton,
 } from "@/components/admin/status-toggles";
+import { ResetPasswordButton } from "@/components/admin/reset-password-button";
 import { notificationStatus } from "@/lib/notify";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 function mapById<T extends { id: string }>(rows: T[] | null | undefined) {
   return new Map((rows ?? []).map((r) => [r.id, r]));
@@ -101,6 +103,17 @@ export default async function SuperAdminPage() {
   const studentMap = mapById(students);
   const notify = notificationStatus();
 
+  const emailById: Record<string, string> = {};
+  try {
+    const admin = createAdminClient();
+    const { data } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
+    for (const u of data.users) {
+      if (u.email) emailById[u.id] = u.email;
+    }
+  } catch (err) {
+    console.error("[super-admin listUsers]", err);
+  }
+
   return (
     <AppShell
       profile={profile!}
@@ -135,10 +148,11 @@ export default async function SuperAdminPage() {
 
       <PanelTable
         id="users-list"
-        title="All users"
-        description="Every platform and madrasa staff account — including ones you just created."
+        title="All users (login credentials)"
+        description="Username is the email used at login. Passwords are hashed in the database — use Reset password to issue a new temporary password (shown once)."
         headers={[
           "Name",
+          "Username (email)",
           "Role",
           "Vendor",
           "Branch",
@@ -149,13 +163,16 @@ export default async function SuperAdminPage() {
         ]}
       >
         {(users ?? []).length === 0 ? (
-          <EmptyRow colSpan={8}>No users yet. Create one below.</EmptyRow>
+          <EmptyRow colSpan={9}>No users yet. Create one below.</EmptyRow>
         ) : (
           (users ?? []).map((u) => (
             <tr key={u.id} className="border-t border-[#0b3d2e]/8">
               <td className="px-3 py-2">
                 <div className="font-medium">{u.full_name}</div>
                 <div className="text-xs text-[#5a6f65]">{u.phone || "—"}</div>
+              </td>
+              <td className="px-3 py-2 font-mono text-xs">
+                {emailById[u.id] || "—"}
               </td>
               <td className="px-3 py-2">
                 <StatusBadge value={u.role} />
@@ -172,9 +189,12 @@ export default async function SuperAdminPage() {
               </td>
               <td className="px-3 py-2">{formatDate(u.created_at)}</td>
               <td className="px-3 py-2">
-                {u.id !== user!.id ? (
-                  <ToggleUserStatusButton userId={u.id} status={u.status} />
-                ) : null}
+                <div className="flex flex-col gap-2">
+                  {u.id !== user!.id ? (
+                    <ToggleUserStatusButton userId={u.id} status={u.status} />
+                  ) : null}
+                  <ResetPasswordButton userId={u.id} />
+                </div>
               </td>
             </tr>
           ))

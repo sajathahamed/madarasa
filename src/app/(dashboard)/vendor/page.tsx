@@ -17,7 +17,9 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { CreateUserForm } from "@/components/admin/create-user-form";
 import { CreateBranchForm } from "@/components/admin/create-branch-form";
 import { ToggleUserStatusButton } from "@/components/admin/status-toggles";
+import { ResetPasswordButton } from "@/components/admin/reset-password-button";
 import { notificationStatus } from "@/lib/notify";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export default async function VendorDashboardPage() {
   const supabase = await createClient();
@@ -167,6 +169,17 @@ export default async function VendorDashboardPage() {
     for (const s of extraStudents ?? []) studentMap.set(s.id, s.full_name);
   }
 
+  const emailById: Record<string, string> = {};
+  try {
+    const admin = createAdminClient();
+    const { data } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
+    for (const u of data.users) {
+      if (u.email) emailById[u.id] = u.email;
+    }
+  } catch (err) {
+    console.error("[vendor listUsers]", err);
+  }
+
   return (
     <AppShell
       profile={profile!}
@@ -237,16 +250,28 @@ export default async function VendorDashboardPage() {
 
       <PanelTable
         id="staff"
-        title="Staff directory"
-        description="Everyone working in your madrasa."
-        headers={["Name", "Role", "Branch", "WhatsApp", "Status", "Joined", ""]}
+        title="Staff directory (login credentials)"
+        description="Username is the email. Passwords are hashed — use Reset password to get a new temporary password."
+        headers={[
+          "Name",
+          "Username (email)",
+          "Role",
+          "Branch",
+          "WhatsApp",
+          "Status",
+          "Joined",
+          "",
+        ]}
       >
         {(staff ?? []).length === 0 ? (
-          <EmptyRow colSpan={7}>No staff yet. Add users below.</EmptyRow>
+          <EmptyRow colSpan={8}>No staff yet. Add users below.</EmptyRow>
         ) : (
           (staff ?? []).map((s) => (
             <tr key={s.id} className="border-t border-[#0b3d2e]/8">
               <td className="px-3 py-2 font-medium">{s.full_name}</td>
+              <td className="px-3 py-2 font-mono text-xs">
+                {emailById[s.id] || "—"}
+              </td>
               <td className="px-3 py-2">
                 <StatusBadge value={s.role} />
               </td>
@@ -259,9 +284,12 @@ export default async function VendorDashboardPage() {
               </td>
               <td className="px-3 py-2">{formatDate(s.created_at)}</td>
               <td className="px-3 py-2">
-                {s.id !== user!.id ? (
-                  <ToggleUserStatusButton userId={s.id} status={s.status} />
-                ) : null}
+                <div className="flex flex-col gap-2">
+                  {s.id !== user!.id ? (
+                    <ToggleUserStatusButton userId={s.id} status={s.status} />
+                  ) : null}
+                  <ResetPasswordButton userId={s.id} />
+                </div>
               </td>
             </tr>
           ))

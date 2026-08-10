@@ -288,3 +288,108 @@ export async function createAppUserAction(input: {
     };
   }
 }
+
+export async function resetUserPasswordAction(userId: string) {
+  try {
+    const auth = await requireManager();
+    if (!auth.ok) return { error: auth.error };
+
+    const { data: target } = await auth.supabase
+      .from("app_users")
+      .select("id, role, vendor_id, full_name, whatsapp_number")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (!target) return { error: "User not found" };
+
+    if (
+      auth.profile.role === "vendor_admin" &&
+      target.vendor_id !== auth.profile.vendor_id
+    ) {
+      return { error: "Forbidden" };
+    }
+
+    let admin;
+    try {
+      admin = createAdminClient();
+    } catch (err) {
+      return {
+        error:
+          err instanceof Error
+            ? err.message
+            : "Admin client unavailable — set SUPABASE_SECRET_KEY",
+      };
+    }
+
+    const tempPassword = randomPassword();
+    const { data: authUser, error: getErr } =
+      await admin.auth.admin.getUserById(userId);
+    if (getErr || !authUser.user?.email) {
+      return { error: getErr?.message ?? "Auth user not found" };
+    }
+
+    const { error } = await admin.auth.admin.updateUserById(userId, {
+      password: tempPassword,
+    });
+    if (error) return { error: error.message };
+
+    try {
+      if (target.whatsapp_number) {
+        await sendCredentialsWhatsApp({
+          to: target.whatsapp_number,
+          fullName: target.full_name,
+          email: authUser.user.email,
+          tempPassword,
+          vendorId: target.vendor_id,
+        });
+      }
+    } catch (waErr) {
+      console.error("[whatsapp reset]", waErr);
+    }
+
+    revalidatePath("/super-admin");
+    revalidatePath("/vendor");
+    return {
+      ok: true as const,
+      credentials: {
+        email: authUser.user.email,
+        tempPassword,
+        fullName: target.full_name,
+        role: target.role,
+      },
+    };
+  } catch (err) {
+    console.error("[resetUserPasswordAction]", err);
+    return {
+      error: err instanceof Error ? err.message : "Failed to reset password",
+    };
+  }
+}
+
+export async function listUserEmailsAction(): Promise<
+  Record<string, string>
+> {
+  try {
+    const auth = await requireManager();
+    if (!auth.ok) return {};
+    const admin = createAdminClient();
+    const map: Record<string, string> = {};
+    let page = 1;
+    for (;;) {
+      const { data, error } = await admin.auth.admin.listUsers({
+        page,
+        perPage: 200,
+      });
+      if (error) break;
+      for (const u of data.users) {
+        if (u.email) map[u.id] = u.email;
+      }
+      if (data.users.length < 200) break;
+      page += 1;
+      if (page > 20) break;
+    }
+    return map;
+  } catch {
+    return {};
+  }
+}
