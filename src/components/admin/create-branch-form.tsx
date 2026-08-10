@@ -81,8 +81,13 @@ export function CreateBranchForm({ vendors }: { vendors: VendorOption[] }) {
           {message}
         </p>
       ) : null}
-      <Button type="submit" disabled={pending} className="bg-[#0b3d2e]">
-        {pending ? "Saving…" : "Create branch"}
+      <Button
+        type="submit"
+        pending={pending}
+        pendingLabel="Saving…"
+        className="bg-[#0b3d2e]"
+      >
+        Create branch
       </Button>
     </form>
   );

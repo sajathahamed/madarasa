@@ -38,8 +38,13 @@ export function ParentPortalClient() {
         <Input id="guardian_phone" name="guardian_phone" required />
       </div>
       {message ? <p className="text-sm text-red-700">{message}</p> : null}
-      <Button type="submit" disabled={pending} className="w-full bg-[#0b3d2e]">
-        {pending ? "Checking…" : "View child"}
+      <Button
+        type="submit"
+        pending={pending}
+        pendingLabel="Checking…"
+        className="w-full bg-[#0b3d2e]"
+      >
+        View child
       </Button>
     </form>
   );

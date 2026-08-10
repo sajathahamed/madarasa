@@ -142,8 +142,13 @@ export function CreateStudentForm({
       </div>
       <div className="sm:col-span-2 space-y-2">
         {message ? <p className="text-sm">{message}</p> : null}
-        <Button type="submit" disabled={pending} className="bg-[#0b3d2e]">
-          {pending ? "Saving…" : "Create student"}
+        <Button
+          type="submit"
+          pending={pending}
+          pendingLabel="Saving…"
+          className="bg-[#0b3d2e]"
+        >
+          Create student
         </Button>
       </div>
     </form>

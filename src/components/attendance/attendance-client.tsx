@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { saveAttendanceAction } from "@/actions/attendance";
+import { StudentSearchInput } from "@/components/students/student-search-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +15,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { matchesStudentQuery } from "@/lib/student-search";
 import type { AttendanceStatus } from "@/types/database";
 
 type Klass = { id: string; name: string };
@@ -37,6 +39,7 @@ export function AttendanceClient({
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [marks, setMarks] = useState<Record<string, AttendanceStatus>>({});
   const [notify, setNotify] = useState(true);
+  const [query, setQuery] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -45,9 +48,14 @@ export function AttendanceClient({
     [membersByClass, classId],
   );
 
+  const visibleMembers = useMemo(
+    () => members.filter((m) => matchesStudentQuery(m, query)),
+    [members, query],
+  );
+
   const setAll = (status: AttendanceStatus) => {
-    const next: Record<string, AttendanceStatus> = {};
-    members.forEach((m) => {
+    const next: Record<string, AttendanceStatus> = { ...marks };
+    visibleMembers.forEach((m) => {
       next[m.student_id] = status;
     });
     setMarks(next);
@@ -79,6 +87,7 @@ export function AttendanceClient({
               onChange={(e) => {
                 setClassId(e.target.value);
                 setMarks({});
+                setQuery("");
               }}
               className="h-9 w-full rounded-lg border border-input bg-background px-2"
             >
@@ -107,6 +116,13 @@ export function AttendanceClient({
           </div>
         </div>
 
+        <StudentSearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder="Search student name or ID…"
+          className="max-w-none"
+        />
+
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
@@ -117,7 +133,7 @@ export function AttendanceClient({
         </label>
 
         <ul className="space-y-3">
-          {members.map((m) => {
+          {visibleMembers.map((m) => {
             const status = marks[m.student_id] || "present";
             return (
               <li
@@ -154,16 +170,20 @@ export function AttendanceClient({
               </li>
             );
           })}
-          {members.length === 0 ? (
+          {visibleMembers.length === 0 ? (
             <li className="text-sm text-[#5a6f65]">
-              Enroll students in this class first.
+              {members.length === 0
+                ? "Enroll students in this class first."
+                : "No students match your search."}
             </li>
           ) : null}
         </ul>
 
         <Button
           type="button"
-          disabled={pending || !classId || members.length === 0}
+          pending={pending}
+          pendingLabel="Saving…"
+          disabled={!classId || members.length === 0}
           className="bg-[#0b3d2e]"
           onClick={() => {
             startTransition(async () => {
@@ -181,7 +201,7 @@ export function AttendanceClient({
             });
           }}
         >
-          {pending ? "Saving…" : "Save attendance"}
+          Save attendance
         </Button>
       </CardContent>
     </Card>

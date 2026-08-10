@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatDate, formatMoney } from "@/lib/format";
 import { AppShell } from "@/components/layout/app-shell";
 import { EmptyRow, PanelTable } from "@/components/layout/panel-table";
+import { VendorStudentsTable } from "@/components/students/vendor-students-table";
 import { DashboardHero, StatCard } from "@/components/dashboard/ui";
 import {
   Card,
@@ -108,7 +109,7 @@ export default async function VendorDashboardPage() {
       )
       .eq("vendor_id", vendorId)
       .order("created_at", { ascending: false })
-      .limit(25),
+      .limit(500),
     supabase
       .from("payments")
       .select("id, amount, status, method, created_at, student_id, branch_id")
@@ -296,45 +297,10 @@ export default async function VendorDashboardPage() {
         )}
       </PanelTable>
 
-      <PanelTable
-        id="students"
-        title="Students"
-        headers={[
-          "Admission",
-          "Name",
-          "Guardian",
-          "Phone",
-          "Branch",
-          "Status",
-          "Joined",
-        ]}
-      >
-        {(recentStudents ?? []).length === 0 ? (
-          <EmptyRow colSpan={7}>
-            No students yet. Add them from{" "}
-            <Link href="/branch/students" className="underline">
-              Students
-            </Link>
-            .
-          </EmptyRow>
-        ) : (
-          (recentStudents ?? []).map((s) => (
-            <tr key={s.id} className="border-t border-[#0b3d2e]/8">
-              <td className="px-3 py-2">{s.admission_no}</td>
-              <td className="px-3 py-2 font-medium">{s.full_name}</td>
-              <td className="px-3 py-2">{s.guardian_name}</td>
-              <td className="px-3 py-2">{s.guardian_phone}</td>
-              <td className="px-3 py-2">
-                {s.branch_id ? branchMap.get(s.branch_id) ?? "—" : "—"}
-              </td>
-              <td className="px-3 py-2">
-                <StatusBadge value={s.status} />
-              </td>
-              <td className="px-3 py-2">{formatDate(s.created_at)}</td>
-            </tr>
-          ))
-        )}
-      </PanelTable>
+      <VendorStudentsTable
+        students={recentStudents ?? []}
+        branchMap={Object.fromEntries(branchMap)}
+      />
 
       <div id="finance" className="grid gap-6 lg:grid-cols-2">
         <PanelTable

@@ -10,6 +10,7 @@ import {
   sendBulkFeeRemindersAction,
   sendFeeReminderAction,
 } from "@/actions/students";
+import { StudentSearchInput } from "@/components/students/student-search-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { formatDate, formatMoney } from "@/lib/format";
+import { matchesStudentQuery } from "@/lib/student-search";
 import type { UserRole } from "@/types/database";
 
 type PaymentRow = {
@@ -90,6 +92,9 @@ export function AccountantDeskClient({
   const [remarks, setRemarks] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<string[]>([]);
   const [message, setMessage] = useState<string | null>(null);
+  const [dueQuery, setDueQuery] = useState("");
+  const [paymentQuery, setPaymentQuery] = useState("");
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const canActPayment = (status: string) =>
@@ -98,12 +103,23 @@ export function AccountantDeskClient({
     role === "super_admin" ||
     role === "vendor_admin";
 
+  const run = (key: string, fn: () => Promise<void>) => {
+    setPendingAction(key);
+    startTransition(async () => {
+      try {
+        await fn();
+      } finally {
+        setPendingAction(null);
+      }
+    });
+  };
+
   const act = (
     kind: "payment" | "donation",
     id: string,
     decision: "approve" | "reject",
   ) => {
-    startTransition(async () => {
+    run(`${kind}-${id}-${decision}`, async () => {
       const result = await reviewTransactionAction({
         kind,
         id,
@@ -114,6 +130,20 @@ export function AccountantDeskClient({
       if (!result.error) router.refresh();
     });
   };
+
+  const filteredPayments = pendingPayments.filter((p) =>
+    matchesStudentQuery(
+      { student_name: p.student_name, admission_no: p.admission_no },
+      paymentQuery,
+    ),
+  );
+
+  const filteredDues = dues.filter((d) =>
+    matchesStudentQuery(
+      { student_name: d.student_name, admission_no: d.admission_no },
+      dueQuery,
+    ),
+  );
 
   const now = new Date();
   const monthLabel = now.toLocaleString(undefined, {
@@ -189,9 +219,11 @@ export function AccountantDeskClient({
             <Button
               type="button"
               className="bg-[#0b3d2e]"
+              pending={pending && pendingAction === "generate"}
+              pendingLabel="Generating…"
               disabled={pending}
               onClick={() => {
-                startTransition(async () => {
+                run("generate", async () => {
                   const result = await generateDuesAction();
                   setMessage(
                     result.error
@@ -229,10 +261,20 @@ export function AccountantDeskClient({
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {pendingPayments.length === 0 ? (
-              <p className="text-sm text-[#5a6f65]">No payments waiting.</p>
+            <StudentSearchInput
+              value={paymentQuery}
+              onChange={setPaymentQuery}
+              placeholder="Search payment by student name or ID…"
+              className="max-w-none"
+            />
+            {filteredPayments.length === 0 ? (
+              <p className="text-sm text-[#5a6f65]">
+                {pendingPayments.length === 0
+                  ? "No payments waiting."
+                  : "No payments match your search."}
+              </p>
             ) : (
-              pendingPayments.map((p) => (
+              filteredPayments.map((p) => (
                 <div
                   key={p.id}
                   className="rounded-xl border border-[#0b3d2e]/10 bg-white/70 p-4"
@@ -272,6 +314,10 @@ export function AccountantDeskClient({
                     <div className="mt-3 flex gap-2">
                       <Button
                         type="button"
+                        pending={
+                          pending && pendingAction === `payment-${p.id}-approve`
+                        }
+                        pendingLabel="Approving…"
                         disabled={pending}
                         className="bg-[#0b3d2e]"
                         onClick={() => act("payment", p.id, "approve")}
@@ -281,6 +327,10 @@ export function AccountantDeskClient({
                       <Button
                         type="button"
                         variant="outline"
+                        pending={
+                          pending && pendingAction === `payment-${p.id}-reject`
+                        }
+                        pendingLabel="Rejecting…"
                         disabled={pending}
                         onClick={() => act("payment", p.id, "reject")}
                       >
@@ -340,6 +390,11 @@ export function AccountantDeskClient({
                     <div className="mt-3 flex gap-2">
                       <Button
                         type="button"
+                        pending={
+                          pending &&
+                          pendingAction === `donation-${d.id}-approve`
+                        }
+                        pendingLabel="Approving…"
                         disabled={pending}
                         className="bg-[#0b3d2e]"
                         onClick={() => act("donation", d.id, "approve")}
@@ -349,6 +404,11 @@ export function AccountantDeskClient({
                       <Button
                         type="button"
                         variant="outline"
+                        pending={
+                          pending &&
+                          pendingAction === `donation-${d.id}-reject`
+                        }
+                        pendingLabel="Rejecting…"
                         disabled={pending}
                         onClick={() => act("donation", d.id, "reject")}
                       >
@@ -374,9 +434,11 @@ export function AccountantDeskClient({
           <Button
             type="button"
             variant="outline"
+            pending={pending && pendingAction === "bulk-remind"}
+            pendingLabel="Sending…"
             disabled={pending || selected.length === 0}
             onClick={() => {
-              startTransition(async () => {
+              run("bulk-remind", async () => {
                 const result = await sendBulkFeeRemindersAction(selected);
                 setMessage(
                   result.error
@@ -389,7 +451,13 @@ export function AccountantDeskClient({
             Remind selected ({selected.length})
           </Button>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
+          <StudentSearchInput
+            value={dueQuery}
+            onChange={setDueQuery}
+            placeholder="Search dues by student name or ID…"
+            className="max-w-none"
+          />
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="border-b border-[#0b3d2e]/10 text-[#5a6f65]">
@@ -405,7 +473,7 @@ export function AccountantDeskClient({
                 </tr>
               </thead>
               <tbody>
-                {dues.map((d) => {
+                {filteredDues.map((d) => {
                   const bal = d.total_due - d.amount_paid;
                   return (
                     <tr key={d.id} className="border-b border-[#0b3d2e]/5">
@@ -456,9 +524,11 @@ export function AccountantDeskClient({
                           type="button"
                           size="sm"
                           variant="outline"
+                          pending={pending && pendingAction === `remind-${d.id}`}
+                          pendingLabel="…"
                           disabled={pending}
                           onClick={() => {
-                            startTransition(async () => {
+                            run(`remind-${d.id}`, async () => {
                               const result = await sendFeeReminderAction(d.id);
                               setMessage(
                                 result.error ? result.error : "Reminder sent",
@@ -472,11 +542,12 @@ export function AccountantDeskClient({
                     </tr>
                   );
                 })}
-                {dues.length === 0 ? (
+                {filteredDues.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="px-2 py-6 text-[#5a6f65]">
-                      No open dues. Generate this month&apos;s dues if the cron
-                      has not run yet.
+                      {dues.length === 0
+                        ? "No open dues. Generate this month&apos;s dues if the cron has not run yet."
+                        : "No dues match your search."}
                     </td>
                   </tr>
                 ) : null}

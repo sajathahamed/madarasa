@@ -10,7 +10,7 @@ export default async function FeesPage() {
     .select("id, full_name, admission_no")
     .eq("status", "active")
     .order("full_name")
-    .limit(300);
+    .limit(500);
   let duesQ = supabase
     .from("fee_dues")
     .select(
@@ -18,7 +18,7 @@ export default async function FeesPage() {
     )
     .neq("status", "paid")
     .order("due_year", { ascending: false })
-    .limit(300);
+    .limit(500);
 
   if (profile.vendor_id) {
     studentsQ = studentsQ.eq("vendor_id", profile.vendor_id);
@@ -35,6 +35,9 @@ export default async function FeesPage() {
   ]);
 
   const nameById = new Map((students ?? []).map((s) => [s.id, s.full_name]));
+  const admissionById = new Map(
+    (students ?? []).map((s) => [s.id, s.admission_no]),
+  );
   const missingIds = [
     ...new Set(
       (dues ?? [])
@@ -45,9 +48,12 @@ export default async function FeesPage() {
   if (missingIds.length > 0) {
     const { data: extra } = await supabase
       .from("students")
-      .select("id, full_name")
+      .select("id, full_name, admission_no")
       .in("id", missingIds);
-    for (const s of extra ?? []) nameById.set(s.id, s.full_name);
+    for (const s of extra ?? []) {
+      nameById.set(s.id, s.full_name);
+      admissionById.set(s.id, s.admission_no);
+    }
   }
 
   const canGenerate = ["super_admin", "vendor_admin", "accountant", "principal"].includes(
@@ -76,6 +82,7 @@ export default async function FeesPage() {
           month_amount: Number(d.month_amount),
           carried_forward: Number(d.carried_forward),
           student_name: nameById.get(d.student_id),
+          admission_no: admissionById.get(d.student_id),
         }))}
         canGenerate={canGenerate}
         canRemind={canRemind}

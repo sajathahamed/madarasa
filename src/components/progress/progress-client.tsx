@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { logIslamicProgressAction } from "@/actions/progress";
+import { StudentSearchInput } from "@/components/students/student-search-input";
+import { StudentSearchSelect } from "@/components/students/student-search-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +17,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { formatDate } from "@/lib/format";
+import { matchesStudentQuery } from "@/lib/student-search";
 import type { IslamicStream, HifzComponent } from "@/types/database";
 
 type Student = { id: string; full_name: string; admission_no: string };
@@ -44,8 +47,25 @@ export function ProgressClient({
 }) {
   const router = useRouter();
   const [stream, setStream] = useState<IslamicStream>("qaida");
+  const [studentId, setStudentId] = useState("");
+  const [logQuery, setLogQuery] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  const filteredLogs = useMemo(
+    () =>
+      logs.filter((l) =>
+        matchesStudentQuery(
+          {
+            student_name: l.student_name,
+            admission_no: students.find((s) => s.id === l.student_id)
+              ?.admission_no,
+          },
+          logQuery,
+        ),
+      ),
+    [logs, logQuery, students],
+  );
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
@@ -63,7 +83,7 @@ export function ProgressClient({
                 const fd = new FormData(e.currentTarget);
                 startTransition(async () => {
                   const result = await logIslamicProgressAction({
-                    student_id: String(fd.get("student_id")),
+                    student_id: studentId,
                     class_id: String(fd.get("class_id") || "") || null,
                     stream,
                     hifz_component:
@@ -79,26 +99,19 @@ export function ProgressClient({
                   setMessage(result.error ? result.error : "Progress logged");
                   if (!result.error) {
                     e.currentTarget.reset();
+                    setStudentId("");
                     router.refresh();
                   }
                 });
               }}
             >
               {message ? <p className="text-sm">{message}</p> : null}
-              <div className="space-y-1">
-                <Label>Student</Label>
-                <select
-                  name="student_id"
-                  required
-                  className="h-9 w-full rounded-lg border border-input bg-background px-2"
-                >
-                  {students.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.full_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <StudentSearchSelect
+                students={students}
+                value={studentId}
+                onChange={setStudentId}
+                required
+              />
               <div className="space-y-1">
                 <Label>Class (optional)</Label>
                 <select
@@ -164,8 +177,14 @@ export function ProgressClient({
                 <input type="checkbox" name="notify_parent" />
                 WhatsApp parent
               </label>
-              <Button type="submit" disabled={pending} className="bg-[#0b3d2e]">
-                {pending ? "Saving…" : "Save log"}
+              <Button
+                type="submit"
+                pending={pending}
+                pendingLabel="Saving…"
+                disabled={!studentId}
+                className="bg-[#0b3d2e]"
+              >
+                Save log
               </Button>
             </form>
           </CardContent>
@@ -176,9 +195,14 @@ export function ProgressClient({
         <CardHeader>
           <CardTitle>Recent logs</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
+          <StudentSearchInput
+            value={logQuery}
+            onChange={setLogQuery}
+            placeholder="Filter logs by student name or ID…"
+          />
           <ul className="max-h-[560px] space-y-2 overflow-y-auto text-sm">
-            {logs.map((l) => (
+            {filteredLogs.map((l) => (
               <li
                 key={l.id}
                 className="rounded-lg border border-[#0b3d2e]/10 p-3"
@@ -195,8 +219,12 @@ export function ProgressClient({
                 </p>
               </li>
             ))}
-            {logs.length === 0 ? (
-              <li className="text-[#5a6f65]">No progress logs yet.</li>
+            {filteredLogs.length === 0 ? (
+              <li className="text-[#5a6f65]">
+                {logs.length === 0
+                  ? "No progress logs yet."
+                  : "No logs match your search."}
+              </li>
             ) : null}
           </ul>
         </CardContent>

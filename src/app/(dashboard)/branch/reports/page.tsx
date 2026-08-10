@@ -1,6 +1,5 @@
-import Link from "next/link";
-
 import { OpsShell } from "@/components/layout/ops-shell";
+import { AtRiskStudentsList } from "@/components/students/at-risk-students-list";
 import { requireOpsContext } from "@/lib/ops-page";
 import { formatMoney } from "@/lib/format";
 import {
@@ -216,30 +215,7 @@ export default async function ReportsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ul className="space-y-2 text-sm">
-            {atRisk.map((r) => (
-              <li
-                key={r.student_id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#0b3d2e]/10 px-3 py-2"
-              >
-                <Link
-                  href={`/branch/students/${r.student_id}`}
-                  className="underline"
-                >
-                  {r.name}
-                </Link>
-                <span>
-                  {formatMoney(r.balance)}
-                  {r.attendance_pct != null
-                    ? ` · ${Math.round(r.attendance_pct)}% att`
-                    : ""}
-                </span>
-              </li>
-            ))}
-            {atRisk.length === 0 ? (
-              <li className="text-[#5a6f65]">No at-risk students flagged.</li>
-            ) : null}
-          </ul>
+          <AtRiskStudentsList rows={atRisk} />
         </CardContent>
       </Card>
     </OpsShell>

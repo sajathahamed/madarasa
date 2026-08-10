@@ -22,7 +22,8 @@ export function ToggleUserStatusButton({
       type="button"
       size="sm"
       variant="outline"
-      disabled={pending}
+      pending={pending}
+      pendingLabel="…"
       onClick={() => {
         startTransition(async () => {
           await setUserStatusAction({
@@ -33,7 +34,7 @@ export function ToggleUserStatusButton({
         });
       }}
     >
-      {pending ? "…" : next === "inactive" ? "Deactivate" : "Activate"}
+      {next === "inactive" ? "Deactivate" : "Activate"}
     </Button>
   );
 }
@@ -54,7 +55,8 @@ export function ToggleVendorStatusButton({
       type="button"
       size="sm"
       variant="outline"
-      disabled={pending}
+      pending={pending}
+      pendingLabel="…"
       onClick={() => {
         startTransition(async () => {
           await setVendorStatusAction({
@@ -65,7 +67,7 @@ export function ToggleVendorStatusButton({
         });
       }}
     >
-      {pending ? "…" : next === "suspended" ? "Suspend" : "Activate"}
+      {next === "suspended" ? "Suspend" : "Activate"}
     </Button>
   );
 }

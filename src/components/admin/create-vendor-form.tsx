@@ -67,8 +67,13 @@ export function CreateVendorForm() {
           {message}
         </p>
       ) : null}
-      <Button type="submit" disabled={pending} className="bg-[#0b3d2e]">
-        {pending ? "Saving…" : "Create vendor"}
+      <Button
+        type="submit"
+        pending={pending}
+        pendingLabel="Saving…"
+        className="bg-[#0b3d2e]"
+      >
+        Create vendor
       </Button>
     </form>
   );

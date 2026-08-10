@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
+import { StudentSearchInput } from "@/components/students/student-search-input";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { Input } from "@/components/ui/input";
+import { matchesStudentQuery } from "@/lib/student-search";
 
 type Row = {
   id: string;
@@ -20,27 +21,16 @@ export function StudentDirectory({ students }: { students: Row[] }) {
   const [status, setStatus] = useState("all");
 
   const filtered = useMemo(() => {
-    const needle = q.trim().toLowerCase();
     return students.filter((s) => {
       if (status !== "all" && s.status !== status) return false;
-      if (!needle) return true;
-      return (
-        s.full_name.toLowerCase().includes(needle) ||
-        s.admission_no.toLowerCase().includes(needle) ||
-        s.guardian_phone.includes(needle)
-      );
+      return matchesStudentQuery(s, q);
     });
   }, [students, q, status]);
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-3">
-        <Input
-          placeholder="Search name, admission, phone…"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          className="max-w-sm"
-        />
+        <StudentSearchInput value={q} onChange={setQ} />
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value)}

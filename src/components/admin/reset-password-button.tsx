@@ -19,7 +19,8 @@ export function ResetPasswordButton({ userId }: { userId: string }) {
         type="button"
         size="sm"
         variant="outline"
-        disabled={pending}
+        pending={pending}
+        pendingLabel="…"
         onClick={() => {
           setError(null);
           startTransition(async () => {
@@ -38,7 +39,7 @@ export function ResetPasswordButton({ userId }: { userId: string }) {
           });
         }}
       >
-        {pending ? "…" : "Reset password"}
+        Reset password
       </Button>
       {error ? <p className="text-xs text-red-700">{error}</p> : null}
       {creds ? (

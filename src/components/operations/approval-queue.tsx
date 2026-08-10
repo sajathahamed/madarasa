@@ -36,6 +36,7 @@ export function ApprovalQueue({
 }) {
   const [remarks, setRemarks] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const act = (
@@ -43,14 +44,20 @@ export function ApprovalQueue({
     id: string,
     decision: "approve" | "reject",
   ) => {
+    const key = `${kind}-${id}-${decision}`;
+    setPendingAction(key);
     startTransition(async () => {
-      const result = await reviewTransactionAction({
-        kind,
-        id,
-        decision,
-        remarks: remarks[id],
-      });
-      setMessage(result.error ? result.error : `Marked ${decision}`);
+      try {
+        const result = await reviewTransactionAction({
+          kind,
+          id,
+          decision,
+          remarks: remarks[id],
+        });
+        setMessage(result.error ? result.error : `Marked ${decision}`);
+      } finally {
+        setPendingAction(null);
+      }
     });
   };
 
@@ -92,6 +99,10 @@ export function ApprovalQueue({
                   <div className="mt-2 flex gap-2">
                     <Button
                       type="button"
+                      pending={
+                        pending && pendingAction === `payment-${p.id}-approve`
+                      }
+                      pendingLabel="Approving…"
                       disabled={pending}
                       className="bg-[#0b3d2e]"
                       onClick={() => act("payment", p.id, "approve")}
@@ -101,6 +112,10 @@ export function ApprovalQueue({
                     <Button
                       type="button"
                       variant="outline"
+                      pending={
+                        pending && pendingAction === `payment-${p.id}-reject`
+                      }
+                      pendingLabel="Rejecting…"
                       disabled={pending}
                       onClick={() => act("payment", p.id, "reject")}
                     >
@@ -145,6 +160,10 @@ export function ApprovalQueue({
                   <div className="mt-2 flex gap-2">
                     <Button
                       type="button"
+                      pending={
+                        pending && pendingAction === `donation-${d.id}-approve`
+                      }
+                      pendingLabel="Approving…"
                       disabled={pending}
                       className="bg-[#0b3d2e]"
                       onClick={() => act("donation", d.id, "approve")}
@@ -154,6 +173,10 @@ export function ApprovalQueue({
                     <Button
                       type="button"
                       variant="outline"
+                      pending={
+                        pending && pendingAction === `donation-${d.id}-reject`
+                      }
+                      pendingLabel="Rejecting…"
                       disabled={pending}
                       onClick={() => act("donation", d.id, "reject")}
                     >

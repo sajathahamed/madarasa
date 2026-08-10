@@ -173,8 +173,13 @@ export function CreateUserForm({
             {message}
           </p>
         ) : null}
-        <Button type="submit" disabled={pending} className="bg-[#0b3d2e]">
-          {pending ? "Creating…" : "Create user + send WhatsApp"}
+        <Button
+          type="submit"
+          pending={pending}
+          pendingLabel="Creating…"
+          className="bg-[#0b3d2e]"
+        >
+          Create user + send WhatsApp
         </Button>
       </div>
     </form>

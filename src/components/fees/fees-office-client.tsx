@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -10,6 +10,7 @@ import {
   sendFeeReminderAction,
 } from "@/actions/students";
 import { RecordPaymentForm } from "@/components/operations/record-payment-form";
+import { StudentSearchInput } from "@/components/students/student-search-input";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -19,6 +20,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { formatMoney } from "@/lib/format";
+import { matchesStudentQuery } from "@/lib/student-search";
 
 type Student = { id: string; full_name: string; admission_no: string };
 type Due = {
@@ -32,6 +34,7 @@ type Due = {
   month_amount?: number;
   carried_forward?: number;
   student_name?: string;
+  admission_no?: string;
 };
 
 export function FeesOfficeClient({
@@ -48,9 +51,36 @@ export function FeesOfficeClient({
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
+  const [query, setQuery] = useState("");
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const outstanding = dues.filter((d) => d.status !== "paid");
+  const outstanding = useMemo(() => {
+    const open = dues.filter((d) => d.status !== "paid");
+    return open.filter((d) =>
+      matchesStudentQuery(
+        {
+          student_name: d.student_name,
+          admission_no:
+            d.admission_no ||
+            students.find((s) => s.id === d.student_id)?.admission_no,
+          full_name: students.find((s) => s.id === d.student_id)?.full_name,
+        },
+        query,
+      ),
+    );
+  }, [dues, query, students]);
+
+  const run = (key: string, fn: () => Promise<void>) => {
+    setPendingAction(key);
+    startTransition(async () => {
+      try {
+        await fn();
+      } finally {
+        setPendingAction(null);
+      }
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -61,9 +91,11 @@ export function FeesOfficeClient({
           <Button
             type="button"
             className="bg-[#0b3d2e]"
+            pending={pending && pendingAction === "generate"}
+            pendingLabel="Generating…"
             disabled={pending}
             onClick={() => {
-              startTransition(async () => {
+              run("generate", async () => {
                 const result = await generateDuesAction();
                 setMessage(
                   result.error
@@ -81,9 +113,11 @@ export function FeesOfficeClient({
           <Button
             type="button"
             variant="outline"
+            pending={pending && pendingAction === "bulk"}
+            pendingLabel="Sending…"
             disabled={pending || selected.length === 0}
             onClick={() => {
-              startTransition(async () => {
+              run("bulk", async () => {
                 const result = await sendBulkFeeRemindersAction(selected);
                 setMessage(
                   result.error
@@ -107,14 +141,16 @@ export function FeesOfficeClient({
           <CardContent>
             <RecordPaymentForm
               students={students}
-              dues={outstanding.map((d) => ({
-                id: d.id,
-                student_id: d.student_id,
-                total_due: d.total_due,
-                amount_paid: d.amount_paid,
-                due_month: d.due_month,
-                due_year: d.due_year,
-              }))}
+              dues={dues
+                .filter((d) => d.status !== "paid")
+                .map((d) => ({
+                  id: d.id,
+                  student_id: d.student_id,
+                  total_due: d.total_due,
+                  amount_paid: d.amount_paid,
+                  due_month: d.due_month,
+                  due_year: d.due_year,
+                }))}
             />
           </CardContent>
         </Card>
@@ -124,11 +160,15 @@ export function FeesOfficeClient({
             <CardTitle>Overdue / open dues</CardTitle>
             <CardDescription>Select rows to bulk-remind parents.</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
+            <StudentSearchInput value={query} onChange={setQuery} />
             <ul className="max-h-[480px] space-y-2 overflow-y-auto text-sm">
               {outstanding.map((d) => {
                 const bal = d.total_due - d.amount_paid;
                 const checked = selected.includes(d.id);
+                const admission =
+                  d.admission_no ||
+                  students.find((s) => s.id === d.student_id)?.admission_no;
                 return (
                   <li
                     key={d.id}
@@ -153,6 +193,9 @@ export function FeesOfficeClient({
                       >
                         {d.student_name || d.student_id.slice(0, 8)}
                       </Link>
+                      {admission ? (
+                        <p className="text-xs text-[#5a6f65]">{admission}</p>
+                      ) : null}
                       <p className="text-[#5a6f65]">
                         {d.due_month}/{d.due_year} · {d.status}
                         {d.carried_forward
@@ -166,9 +209,11 @@ export function FeesOfficeClient({
                         type="button"
                         size="sm"
                         variant="outline"
+                        pending={pending && pendingAction === d.id}
+                        pendingLabel="…"
                         disabled={pending}
                         onClick={() => {
-                          startTransition(async () => {
+                          run(d.id, async () => {
                             const result = await sendFeeReminderAction(d.id);
                             setMessage(
                               result.error ? result.error : "Reminder sent",
@@ -183,7 +228,11 @@ export function FeesOfficeClient({
                 );
               })}
               {outstanding.length === 0 ? (
-                <li className="text-[#5a6f65]">No open dues.</li>
+                <li className="text-[#5a6f65]">
+                  {dues.some((d) => d.status !== "paid")
+                    ? "No dues match your search."
+                    : "No open dues."}
+                </li>
               ) : null}
             </ul>
           </CardContent>

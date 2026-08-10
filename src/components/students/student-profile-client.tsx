@@ -270,8 +270,13 @@ export function StudentProfileClient({
             </div>
             {canEdit ? (
               <div className="sm:col-span-2">
-                <Button type="submit" disabled={pending} className="bg-[#0b3d2e]">
-                  {pending ? "Saving…" : "Save profile"}
+                <Button
+                  type="submit"
+                  pending={pending}
+                  pendingLabel="Saving…"
+                  className="bg-[#0b3d2e]"
+                >
+                  Save profile
                 </Button>
               </div>
             ) : null}
@@ -342,7 +347,12 @@ export function StudentProfileClient({
                 </>
               ) : null}
               <div className="flex items-end">
-                <Button type="submit" disabled={pending} variant="outline">
+                <Button
+                  type="submit"
+                  pending={pending}
+                  pendingLabel="Saving…"
+                  variant="outline"
+                >
                   Set new plan
                 </Button>
               </div>
@@ -428,7 +438,8 @@ export function StudentProfileClient({
             <Button
               type="button"
               variant="outline"
-              disabled={pending}
+              pending={pending}
+              pendingLabel="Generating…"
               onClick={() => {
                 startTransition(async () => {
                   const result = await createParentLinkAction(student.id);

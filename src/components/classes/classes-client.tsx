@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 import { createClassAction, enrollStudentAction } from "@/actions/attendance";
+import { StudentSearchInput } from "@/components/students/student-search-input";
+import { StudentSearchSelect } from "@/components/students/student-search-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +17,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { matchesStudentQuery } from "@/lib/student-search";
 
 type Klass = {
   id: string;
@@ -29,6 +32,7 @@ type Enrollment = {
   student_id: string;
   is_active: boolean;
   student_name?: string;
+  admission_no?: string;
 };
 
 export function ClassesClient({
@@ -49,7 +53,15 @@ export function ClassesClient({
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [classId, setClassId] = useState(classes[0]?.id || "");
+  const [studentId, setStudentId] = useState("");
+  const [rosterQuery, setRosterQuery] = useState("");
+
+  const admissionById = useMemo(
+    () => new Map(students.map((s) => [s.id, s.admission_no])),
+    [students],
+  );
 
   return (
     <div className="space-y-6">
@@ -68,17 +80,23 @@ export function ClassesClient({
                 onSubmit={(e) => {
                   e.preventDefault();
                   const fd = new FormData(e.currentTarget);
+                  setPendingAction("create");
                   startTransition(async () => {
-                    const result = await createClassAction({
-                      vendor_id: vendorId,
-                      branch_id: branchId,
-                      name: String(fd.get("name")),
-                      schedule_note: String(fd.get("schedule_note") || "") || undefined,
-                    });
-                    setMessage(result.error ? result.error : "Class created");
-                    if (!result.error) {
-                      e.currentTarget.reset();
-                      router.refresh();
+                    try {
+                      const result = await createClassAction({
+                        vendor_id: vendorId,
+                        branch_id: branchId,
+                        name: String(fd.get("name")),
+                        schedule_note:
+                          String(fd.get("schedule_note") || "") || undefined,
+                      });
+                      setMessage(result.error ? result.error : "Class created");
+                      if (!result.error) {
+                        e.currentTarget.reset();
+                        router.refresh();
+                      }
+                    } finally {
+                      setPendingAction(null);
                     }
                   });
                 }}
@@ -91,7 +109,13 @@ export function ClassesClient({
                   <Label>Schedule note</Label>
                   <Input name="schedule_note" placeholder="Sat–Sun 8–10am" />
                 </div>
-                <Button type="submit" disabled={pending || !vendorId || !branchId} className="bg-[#0b3d2e]">
+                <Button
+                  type="submit"
+                  pending={pending && pendingAction === "create"}
+                  pendingLabel="Creating…"
+                  disabled={pending || !vendorId || !branchId}
+                  className="bg-[#0b3d2e]"
+                >
                   Create class
                 </Button>
               </form>
@@ -109,14 +133,21 @@ export function ClassesClient({
                 className="space-y-3"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  const fd = new FormData(e.currentTarget);
+                  setPendingAction("enroll");
                   startTransition(async () => {
-                    const result = await enrollStudentAction({
-                      class_id: String(fd.get("class_id")),
-                      student_id: String(fd.get("student_id")),
-                    });
-                    setMessage(result.error ? result.error : "Enrolled");
-                    if (!result.error) router.refresh();
+                    try {
+                      const result = await enrollStudentAction({
+                        class_id: classId,
+                        student_id: studentId,
+                      });
+                      setMessage(result.error ? result.error : "Enrolled");
+                      if (!result.error) {
+                        setStudentId("");
+                        router.refresh();
+                      }
+                    } finally {
+                      setPendingAction(null);
+                    }
                   });
                 }}
               >
@@ -136,21 +167,19 @@ export function ClassesClient({
                     ))}
                   </select>
                 </div>
-                <div className="space-y-1">
-                  <Label>Student</Label>
-                  <select
-                    name="student_id"
-                    required
-                    className="h-9 w-full rounded-lg border border-input bg-background px-2"
-                  >
-                    {students.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.full_name} ({s.admission_no})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <Button type="submit" disabled={pending || classes.length === 0} variant="outline">
+                <StudentSearchSelect
+                  students={students}
+                  value={studentId}
+                  onChange={setStudentId}
+                  required
+                />
+                <Button
+                  type="submit"
+                  pending={pending && pendingAction === "enroll"}
+                  pendingLabel="Enrolling…"
+                  disabled={pending || classes.length === 0 || !studentId}
+                  variant="outline"
+                >
                   Enroll
                 </Button>
               </form>
@@ -164,10 +193,23 @@ export function ClassesClient({
           <CardTitle>Classes</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          <StudentSearchInput
+            value={rosterQuery}
+            onChange={setRosterQuery}
+            placeholder="Filter roster by name or ID…"
+          />
           {classes.map((c) => {
-            const members = enrollments.filter(
-              (e) => e.class_id === c.id && e.is_active,
-            );
+            const members = enrollments.filter((e) => {
+              if (e.class_id !== c.id || !e.is_active) return false;
+              return matchesStudentQuery(
+                {
+                  student_name: e.student_name,
+                  admission_no:
+                    e.admission_no || admissionById.get(e.student_id),
+                },
+                rosterQuery,
+              );
+            });
             return (
               <div
                 key={c.id}
@@ -178,7 +220,7 @@ export function ClassesClient({
                     <p className="font-medium text-[#0b3d2e]">{c.name}</p>
                     <p className="text-xs text-[#5a6f65]">
                       {c.schedule_note || "No schedule note"} · {members.length}{" "}
-                      students
+                      shown
                     </p>
                   </div>
                   <Link
@@ -197,8 +239,19 @@ export function ClassesClient({
                       >
                         {m.student_name || m.student_id.slice(0, 8)}
                       </Link>
+                      <span className="text-[#5a6f65]">
+                        {" "}
+                        (
+                        {m.admission_no ||
+                          admissionById.get(m.student_id) ||
+                          "—"}
+                        )
+                      </span>
                     </li>
                   ))}
+                  {members.length === 0 ? (
+                    <li className="text-[#5a6f65]">No matching students.</li>
+                  ) : null}
                 </ul>
               </div>
             );
