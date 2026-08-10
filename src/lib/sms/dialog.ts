@@ -1,12 +1,14 @@
 /**
- * Dialog Axiata SMS / Rich Communication integration.
+ * Dialog Axiata SMS integration.
  *
- * Supports:
- * 1) Ideamart SMS API (applicationId + password)
- * 2) Ideabiz / enterprise bearer token (optional)
- *
- * Leave credentials empty until provisioned — sends are no-ops that log queued.
+ * Modes:
+ * 1) richcommunication — https://richcommunication.dialog.lk/api/sms/send
+ *    (USER + md5 DIGEST + CREATED headers; mask sender name)
+ * 2) ideamart — applicationId + password JSON API
+ * 3) ideabiz — bearer token SMS API
  */
+
+import { createHash } from "crypto";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -18,6 +20,10 @@ export type SmsResult = {
   error?: string;
 };
 
+function smsMode() {
+  return (process.env.DIALOG_SMS_MODE || "richcommunication").toLowerCase();
+}
+
 function normalizePhone(phone: string) {
   let p = phone.replace(/[^\d+]/g, "");
   if (p.startsWith("+")) p = p.slice(1);
@@ -27,6 +33,21 @@ function normalizePhone(phone: string) {
 
 function toTelAddress(phone: string) {
   return `tel:${normalizePhone(phone)}`;
+}
+
+function maskName() {
+  return (
+    process.env.DIALOG_SMS_MASK ||
+    process.env.DIALOG_SMS_SENDER ||
+    "Upview Tech"
+  ).trim();
+}
+
+function richCommCredentials() {
+  const username =
+    process.env.DIALOG_SMS_USER || process.env.DIALOG_APP_ID || "";
+  const password = process.env.DIALOG_PASSWORD || process.env.DIALOG_SMS_PASSWORD || "";
+  return { username, password };
 }
 
 async function logSms(opts: {
@@ -47,6 +68,8 @@ async function logSms(opts: {
     status: opts.status,
     provider_response: {
       channel: "dialog_sms",
+      mode: smsMode(),
+      mask: maskName(),
       body: opts.body,
       result: opts.response,
     } as never,
@@ -67,6 +90,96 @@ async function logSms(opts: {
       console.error("[sms log]", err);
     }
   }
+}
+
+/**
+ * Dialog Rich Communication API (same contract as Marketing/Send_msg PHP).
+ * Numbers may be a single MSISDN or comma-separated list.
+ */
+async function sendViaRichCommunication(
+  numbers: string[],
+  message: string,
+): Promise<SmsResult> {
+  const { username, password } = richCommCredentials();
+  const url =
+    process.env.DIALOG_SMS_URL ||
+    "https://richcommunication.dialog.lk/api/sms/send";
+
+  if (!username || !password) {
+    return {
+      ok: false,
+      queued: true,
+      error: "Dialog Rich Communication credentials not configured",
+      response: null,
+    };
+  }
+
+  const normalized = numbers.map(normalizePhone).filter(Boolean);
+  if (normalized.length === 0) {
+    return { ok: false, error: "No valid phone numbers", response: null };
+  }
+
+  const now = new Date();
+  // Asia/Colombo-ish ISO local without timezone suffix (matches PHP Y-m-d\TH:i:s)
+  const created = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Asia/Colombo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  })
+    .format(now)
+    .replace(" ", "T");
+
+  const digest = createHash("md5").update(password).digest("hex");
+  const requestData = {
+    messages: [
+      {
+        clientRef: process.env.DIALOG_SMS_CLIENT_REF || "Madarasa",
+        number: normalized.join(","),
+        mask: maskName(),
+        text: message,
+        campaignName: process.env.DIALOG_SMS_CAMPAIGN || "madarasa",
+      },
+    ],
+  };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      USER: username,
+      DIGEST: digest,
+      CREATED: created,
+    },
+    body: JSON.stringify(requestData),
+  });
+
+  const raw = await res.text();
+  let json: Record<string, unknown> | null = null;
+  try {
+    json = raw ? (JSON.parse(raw) as Record<string, unknown>) : null;
+  } catch {
+    json = { raw };
+  }
+
+  const resultDesc = String(json?.resultDesc ?? json?.result ?? "");
+  const ok =
+    res.ok &&
+    (resultDesc.toUpperCase() === "SUCCESS" ||
+      String(json?.resultCode ?? "") === "0" ||
+      String(json?.status ?? "").toUpperCase() === "SUCCESS");
+
+  return {
+    ok,
+    response: json,
+    error: ok
+      ? undefined
+      : resultDesc || JSON.stringify(json ?? { status: res.status }),
+  };
 }
 
 async function sendViaIdeamart(
@@ -120,8 +233,7 @@ async function sendViaIdeabiz(
   const url =
     process.env.DIALOG_IDEABIZ_SMS_URL ||
     "https://ideabiz.lk/apicall/smsmessaging/v3/outbound/requests";
-  const sender =
-    process.env.DIALOG_SMS_SENDER || process.env.DIALOG_APP_ID || "MADARASA";
+  const sender = maskName();
 
   if (!token) {
     return {
@@ -166,13 +278,20 @@ export async function sendDialogSms(opts: {
     return { ok: false, queued: true, error: "Dialog SMS disabled" };
   }
 
-  const mode = (process.env.DIALOG_SMS_MODE || "ideamart").toLowerCase();
+  const digits = opts.to.replace(/\D/g, "");
+  if (!digits || /^0+$/.test(digits) || digits.length < 9) {
+    return { ok: false, error: "Invalid phone number", response: null };
+  }
+
+  const mode = smsMode();
   let result: SmsResult;
 
   if (mode === "ideabiz") {
     result = await sendViaIdeabiz(opts.to, opts.message);
-  } else {
+  } else if (mode === "ideamart") {
     result = await sendViaIdeamart(opts.to, opts.message);
+  } else {
+    result = await sendViaRichCommunication([opts.to], opts.message);
   }
 
   const status = result.ok ? "sent" : result.queued ? "queued" : "failed";
@@ -189,9 +308,66 @@ export async function sendDialogSms(opts: {
   return result;
 }
 
+/** Bulk SMS via Rich Communication (comma-joined numbers), one API call. */
+export async function sendDialogSmsBulk(opts: {
+  to: string[];
+  message: string;
+  vendorId?: string | null;
+  purpose?: string;
+}): Promise<SmsResult> {
+  if (process.env.DIALOG_SMS_ENABLED === "false") {
+    return { ok: false, queued: true, error: "Dialog SMS disabled" };
+  }
+
+  const mode = smsMode();
+  if (mode !== "richcommunication" && mode !== "rich" && mode !== "dialog") {
+    // Fall back: send one-by-one for other providers
+    let okCount = 0;
+    let last: SmsResult = { ok: false, error: "No recipients" };
+    for (const phone of opts.to) {
+      last = await sendDialogSms({
+        to: phone,
+        message: opts.message,
+        vendorId: opts.vendorId,
+        purpose: opts.purpose,
+      });
+      if (last.ok) okCount++;
+    }
+    return {
+      ok: okCount > 0,
+      response: { sent: okCount, total: opts.to.length },
+      error: okCount === opts.to.length ? undefined : last.error,
+    };
+  }
+
+  const result = await sendViaRichCommunication(opts.to, opts.message);
+  const status = result.ok ? "sent" : result.queued ? "queued" : "failed";
+
+  await Promise.all(
+    opts.to.map((phone) =>
+      logSms({
+        to: phone,
+        body: opts.message,
+        status,
+        response: result.response ?? { error: result.error },
+        vendorId: opts.vendorId,
+        purpose: opts.purpose || "bulk",
+      }),
+    ),
+  );
+
+  return result;
+}
+
 export function isDialogSmsConfigured() {
-  const mode = (process.env.DIALOG_SMS_MODE || "ideamart").toLowerCase();
   if (process.env.DIALOG_SMS_ENABLED === "false") return false;
-  if (mode === "ideabiz") return Boolean(process.env.DIALOG_IDEABIZ_ACCESS_TOKEN);
-  return Boolean(process.env.DIALOG_APP_ID && process.env.DIALOG_PASSWORD);
+  const mode = smsMode();
+  if (mode === "ideabiz") {
+    return Boolean(process.env.DIALOG_IDEABIZ_ACCESS_TOKEN);
+  }
+  if (mode === "ideamart") {
+    return Boolean(process.env.DIALOG_APP_ID && process.env.DIALOG_PASSWORD);
+  }
+  const { username, password } = richCommCredentials();
+  return Boolean(username && password);
 }

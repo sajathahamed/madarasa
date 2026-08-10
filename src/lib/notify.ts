@@ -129,5 +129,9 @@ export function notificationStatus() {
   return {
     channels: [...channels()],
     dialogConfigured: isDialogSmsConfigured(),
+    smsMask:
+      process.env.DIALOG_SMS_MASK ||
+      process.env.DIALOG_SMS_SENDER ||
+      "Upview Tech",
   };
 }
