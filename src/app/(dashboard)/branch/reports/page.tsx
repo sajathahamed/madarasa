@@ -1,5 +1,11 @@
 import { OpsShell } from "@/components/layout/ops-shell";
 import { AtRiskStudentsList } from "@/components/students/at-risk-students-list";
+import { PrincipalReportActions } from "@/components/reports/principal-report-actions";
+import {
+  PrincipalReportDocument,
+  buildPrincipalReportShareText,
+  type PrincipalReportData,
+} from "@/components/reports/principal-report-document";
 import { requireOpsContext } from "@/lib/ops-page";
 import { formatMoney } from "@/lib/format";
 import {
@@ -118,6 +124,57 @@ export default async function ReportsPage() {
     .filter((r) => r.balance > 0 && (r.attendance_pct === null || r.attendance_pct < 85))
     .slice(0, 50);
 
+  const attendanceRate =
+    records.length === 0
+      ? null
+      : Math.round(
+          (records.filter((r) => r.status !== "absent").length / records.length) *
+            100,
+        );
+
+  let vendorName = "Madarasa";
+  let branchName = "Branch";
+  if (profile.vendor_id) {
+    const { data: vendor } = await supabase
+      .from("vendors")
+      .select("name")
+      .eq("id", profile.vendor_id)
+      .maybeSingle();
+    if (vendor?.name) vendorName = vendor.name;
+  }
+  if (profile.branch_id) {
+    const { data: branch } = await supabase
+      .from("branches")
+      .select("name")
+      .eq("id", profile.branch_id)
+      .maybeSingle();
+    if (branch?.name) branchName = branch.name;
+  }
+
+  const reportData: PrincipalReportData = {
+    vendorName,
+    branchName,
+    principalName: profile.full_name,
+    month,
+    year,
+    invoiced,
+    collectedFromDues,
+    collectedPayments,
+    outstanding,
+    sessionsCount: sessions?.length ?? 0,
+    marksCount: records.length,
+    attendanceRate,
+    atRisk: atRisk.map((r) => ({
+      name: r.name,
+      admission_no: r.admission_no,
+      balance: r.balance,
+      attendance_pct: r.attendance_pct,
+    })),
+  };
+
+  const shareText = buildPrincipalReportShareText(reportData);
+  const pdfTitle = `Madarasa-Report-${branchName.replace(/\s+/g, "-")}-${year}-${month}`;
+
   const collectionCsv = toCsv([
     ["metric", "value"],
     ["month", `${month}/${year}`],
@@ -138,8 +195,25 @@ export default async function ReportsPage() {
   ]);
 
   return (
-    <OpsShell profile={profile} title="Reports">
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+    <OpsShell
+      profile={profile}
+      title="Reports"
+      subtitle="Principal monthly summary — PDF and WhatsApp share"
+    >
+      <Card className="mb-6 print:hidden">
+        <CardHeader>
+          <CardTitle>Share &amp; export</CardTitle>
+          <CardDescription>
+            Download a PDF of this month&apos;s report, or share the summary on
+            WhatsApp.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <PrincipalReportActions shareText={shareText} title={pdfTitle} />
+        </CardContent>
+      </Card>
+
+      <div className="mb-6 grid gap-4 sm:grid-cols-3 print:hidden">
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Invoiced ({month}/{year})</CardDescription>
@@ -162,7 +236,7 @@ export default async function ReportsPage() {
         </Card>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2 print:hidden">
         <Card>
           <CardHeader>
             <CardTitle>Attendance this month</CardTitle>
@@ -173,13 +247,7 @@ export default async function ReportsPage() {
           <CardContent>
             <p className="text-sm text-[#5a6f65]">
               Present/late rate across all marks:{" "}
-              {records.length === 0
-                ? "—"
-                : `${Math.round(
-                    (records.filter((r) => r.status !== "absent").length /
-                      records.length) *
-                      100,
-                  )}%`}
+              {attendanceRate == null ? "—" : `${attendanceRate}%`}
             </p>
           </CardContent>
         </Card>
@@ -207,7 +275,7 @@ export default async function ReportsPage() {
         </Card>
       </div>
 
-      <Card className="mt-6">
+      <Card className="mt-6 print:hidden">
         <CardHeader>
           <CardTitle>At-risk students</CardTitle>
           <CardDescription>
@@ -218,6 +286,16 @@ export default async function ReportsPage() {
           <AtRiskStudentsList rows={atRisk} />
         </CardContent>
       </Card>
+
+      <div className="mt-8">
+        <h2
+          className="mb-3 text-lg text-[#0b3d2e] print:hidden sm:text-xl"
+          style={{ fontFamily: "var(--font-display), serif" }}
+        >
+          PDF preview
+        </h2>
+        <PrincipalReportDocument data={reportData} />
+      </div>
     </OpsShell>
   );
 }

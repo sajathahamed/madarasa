@@ -145,3 +145,28 @@
     padding-right: max(1rem, env(safe-area-inset-right));
   }
 }
+
+@media print {
+  header,
+  nav,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  body {
+    background: white !important;
+    overflow: visible !important;
+  }
+
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  #principal-report {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+}

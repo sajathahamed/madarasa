@@ -83,7 +83,7 @@ export function AppShell({
         <AppShellNav nav={nav} />
       </header>
       <main className="mx-auto w-full max-w-6xl px-4 py-5 sm:py-8 md:px-6">
-        <div className="mb-5 sm:mb-6">
+        <div className="mb-5 print:hidden sm:mb-6">
           <h1
             className="text-2xl leading-tight text-[#0b3d2e] sm:text-3xl md:text-4xl"
             style={{ fontFamily: "var(--font-display), serif" }}
