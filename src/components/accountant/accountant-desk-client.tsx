@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { formatDate, formatMoney } from "@/lib/format";
+import { openWhatsAppLinks } from "@/lib/open-whatsapp";
 import { matchesStudentQuery } from "@/lib/student-search";
 import type { UserRole } from "@/types/database";
 
@@ -440,15 +441,19 @@ export function AccountantDeskClient({
             onClick={() => {
               run("bulk-remind", async () => {
                 const result = await sendBulkFeeRemindersAction(selected);
+                if (result.error) {
+                  setMessage(result.error);
+                  return;
+                }
                 setMessage(
-                  result.error
-                    ? result.error
-                    : `Reminders sent ${result.sent}, failed ${result.failed}`,
+                  result.message ||
+                    `Reminders: ${result.sent} ok, ${result.failed} failed`,
                 );
+                openWhatsAppLinks(result.whatsappUrls);
               });
             }}
           >
-            Remind selected ({selected.length})
+            SMS + WhatsApp remind selected ({selected.length})
           </Button>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -530,9 +535,17 @@ export function AccountantDeskClient({
                           onClick={() => {
                             run(`remind-${d.id}`, async () => {
                               const result = await sendFeeReminderAction(d.id);
+                              if (result.error) {
+                                setMessage(result.error);
+                                return;
+                              }
                               setMessage(
-                                result.error ? result.error : "Reminder sent",
+                                result.message ||
+                                  (result.smsOk
+                                    ? "SMS sent · Opening WhatsApp…"
+                                    : "Opening WhatsApp…"),
                               );
+                              openWhatsAppLinks(result.whatsappUrl);
                             });
                           }}
                         >

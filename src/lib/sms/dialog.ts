@@ -12,6 +12,7 @@ import { createHash } from "crypto";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { isValidMobile, toWhatsAppMsIsdn } from "@/lib/phone";
 
 export type SmsResult = {
   ok: boolean;
@@ -25,10 +26,7 @@ function smsMode() {
 }
 
 function normalizePhone(phone: string) {
-  let p = phone.replace(/[^\d+]/g, "");
-  if (p.startsWith("+")) p = p.slice(1);
-  if (p.startsWith("0")) p = `94${p.slice(1)}`;
-  return p;
+  return toWhatsAppMsIsdn(phone);
 }
 
 function toTelAddress(phone: string) {
@@ -167,11 +165,20 @@ async function sendViaRichCommunication(
   }
 
   const resultDesc = String(json?.resultDesc ?? json?.result ?? "");
+  const resultCode = json?.resultCode;
+  const nestedOk = Array.isArray(json?.messages)
+    ? (json.messages as { resultDesc?: string; resultCode?: number }[]).some(
+        (m) =>
+          String(m.resultDesc ?? "").toUpperCase() === "SUCCESS" ||
+          m.resultCode === 0,
+      )
+    : false;
   const ok =
     res.ok &&
     (resultDesc.toUpperCase() === "SUCCESS" ||
-      String(json?.resultCode ?? "") === "0" ||
-      String(json?.status ?? "").toUpperCase() === "SUCCESS");
+      resultCode === 0 ||
+      String(resultCode ?? "") === "0" ||
+      nestedOk);
 
   return {
     ok,
@@ -279,7 +286,7 @@ export async function sendDialogSms(opts: {
   }
 
   const digits = opts.to.replace(/\D/g, "");
-  if (!digits || /^0+$/.test(digits) || digits.length < 9) {
+  if (!isValidMobile(opts.to) || /^0+$/.test(digits)) {
     return { ok: false, error: "Invalid phone number", response: null };
   }
 

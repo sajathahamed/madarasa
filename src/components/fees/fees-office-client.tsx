@@ -20,6 +20,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { formatMoney } from "@/lib/format";
+import { openWhatsAppLinks } from "@/lib/open-whatsapp";
 import { matchesStudentQuery } from "@/lib/student-search";
 
 type Student = { id: string; full_name: string; admission_no: string };
@@ -119,15 +120,19 @@ export function FeesOfficeClient({
             onClick={() => {
               run("bulk", async () => {
                 const result = await sendBulkFeeRemindersAction(selected);
+                if (result.error) {
+                  setMessage(result.error);
+                  return;
+                }
                 setMessage(
-                  result.error
-                    ? result.error
-                    : `Reminders sent ${result.sent}, failed ${result.failed}`,
+                  result.message ||
+                    `Reminders: ${result.sent} ok, ${result.failed} failed`,
                 );
+                openWhatsAppLinks(result.whatsappUrls);
               });
             }}
           >
-            WhatsApp remind selected ({selected.length})
+            SMS + WhatsApp remind selected ({selected.length})
           </Button>
         ) : null}
       </div>
@@ -215,9 +220,19 @@ export function FeesOfficeClient({
                         onClick={() => {
                           run(d.id, async () => {
                             const result = await sendFeeReminderAction(d.id);
+                            if (result.error) {
+                              setMessage(result.error);
+                              return;
+                            }
                             setMessage(
-                              result.error ? result.error : "Reminder sent",
+                              result.message ||
+                                (result.smsOk
+                                  ? "SMS sent · Opening WhatsApp…"
+                                  : "Opening WhatsApp…"),
                             );
+                            if (result.whatsappUrl) {
+                              openWhatsAppLinks(result.whatsappUrl);
+                            }
                           });
                         }}
                       >

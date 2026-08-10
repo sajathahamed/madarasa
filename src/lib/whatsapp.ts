@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { toWhatsAppMsIsdn } from "@/lib/phone";
 
 type WhatsAppMessageType =
   | "credentials"
@@ -25,7 +26,20 @@ type ProviderResult = {
 };
 
 function normalizePhone(phone: string) {
-  return phone.replace(/[^\d+]/g, "");
+  return toWhatsAppMsIsdn(phone);
+}
+
+export function isWhatsAppApiConfigured() {
+  const provider = process.env.WHATSAPP_PROVIDER ?? "meta";
+  if (provider === "ultramsg") {
+    return Boolean(
+      process.env.WHATSAPP_ULTRAMSG_INSTANCE_ID &&
+        process.env.WHATSAPP_ULTRAMSG_TOKEN,
+    );
+  }
+  return Boolean(
+    process.env.WHATSAPP_META_TOKEN && process.env.WHATSAPP_META_PHONE_NUMBER_ID,
+  );
 }
 
 async function sendViaMeta(

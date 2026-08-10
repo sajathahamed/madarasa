@@ -186,7 +186,7 @@ export async function sendFeeReminderAction(dueId: string) {
     if (!student?.guardian_phone) return { error: "No guardian phone" };
 
     const outstanding = Number(due.total_due) - Number(due.amount_paid);
-    await notifyPaymentReminder({
+    const result = await notifyPaymentReminder({
       to: student.guardian_phone,
       studentName: student.full_name,
       amount: String(outstanding.toFixed(2)),
@@ -194,7 +194,18 @@ export async function sendFeeReminderAction(dueId: string) {
       vendorId: due.vendor_id,
       studentId: due.student_id,
     });
-    return { ok: true as const };
+
+    if (!result.ok && !result.whatsappUrl) {
+      return { error: result.message || "Failed to send reminder" };
+    }
+
+    return {
+      ok: true as const,
+      message: result.message,
+      whatsappUrl: result.whatsappUrl,
+      smsOk: result.sms?.ok ?? false,
+      phone: result.phone,
+    };
   } catch (err) {
     console.error("[sendFeeReminderAction]", err);
     return {
@@ -217,12 +228,29 @@ export async function sendBulkFeeRemindersAction(dueIds: string[]) {
 
     let sent = 0;
     let failed = 0;
+    const whatsappUrls: string[] = [];
+    const messages: string[] = [];
+
     for (const id of dueIds.slice(0, 100)) {
       const result = await sendFeeReminderAction(id);
-      if (result.error) failed += 1;
-      else sent += 1;
+      if (result.error) {
+        failed += 1;
+        messages.push(result.error);
+      } else {
+        sent += 1;
+        if (result.whatsappUrl) whatsappUrls.push(result.whatsappUrl);
+        if (result.message) messages.push(result.message);
+      }
     }
-    return { ok: true as const, sent, failed };
+    return {
+      ok: true as const,
+      sent,
+      failed,
+      whatsappUrls,
+      message:
+        messages[0] ||
+        `Reminders: ${sent} ok, ${failed} failed · Opening WhatsApp…`,
+    };
   } catch (err) {
     console.error("[sendBulkFeeRemindersAction]", err);
     return {
