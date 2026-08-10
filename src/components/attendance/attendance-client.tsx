@@ -89,7 +89,7 @@ export function AttendanceClient({
                 setMarks({});
                 setQuery("");
               }}
-              className="h-9 w-full rounded-lg border border-input bg-background px-2"
+              className="h-10 w-full rounded-lg border border-input bg-background px-2 md:h-9"
             >
               {classes.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -106,7 +106,7 @@ export function AttendanceClient({
               onChange={(e) => setDate(e.target.value)}
             />
           </div>
-          <div className="flex items-end gap-2">
+          <div className="flex flex-wrap items-end gap-2">
             <Button type="button" size="sm" variant="outline" onClick={() => setAll("present")}>
               All present
             </Button>

@@ -123,8 +123,25 @@
   }
   body {
     @apply bg-background text-foreground;
+    overflow-x: hidden;
   }
   html {
     @apply font-sans;
+  }
+  /* Comfortable native selects on phones */
+  select {
+    min-height: 2.5rem;
+  }
+  @media (min-width: 768px) {
+    select {
+      min-height: 2.25rem;
+    }
+  }
+}
+
+@layer utilities {
+  .safe-px {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
   }
 }

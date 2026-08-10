@@ -105,7 +105,7 @@ export function CreateUserForm({
           name="role"
           value={role}
           onChange={(e) => setRole(e.target.value as (typeof ROLES)[number])}
-          className="h-9 w-full rounded-lg border border-input bg-background px-2 text-sm"
+          className="h-10 w-full rounded-lg border border-input bg-background px-2 text-sm md:h-9"
         >
           {roleOptions.map((r) => (
             <option key={r} value={r}>
@@ -128,7 +128,7 @@ export function CreateUserForm({
             value={vendorId}
             disabled={!!lockVendorId}
             onChange={(e) => setVendorId(e.target.value)}
-            className="h-9 w-full rounded-lg border border-input bg-background px-2 text-sm disabled:opacity-70"
+            className="h-10 w-full rounded-lg border border-input bg-background px-2 text-sm disabled:opacity-70 md:h-9"
           >
             <option value="">Select vendor</option>
             {vendors.map((v) => (
@@ -146,7 +146,7 @@ export function CreateUserForm({
             id="branch_id"
             name="branch_id"
             required
-            className="h-9 w-full rounded-lg border border-input bg-background px-2 text-sm"
+            className="h-10 w-full rounded-lg border border-input bg-background px-2 text-sm md:h-9"
           >
             <option value="">Select branch</option>
             {filteredBranches.map((b) => (

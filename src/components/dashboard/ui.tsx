@@ -82,7 +82,7 @@ export function DashboardHero({
   arabic?: string;
 }) {
   return (
-    <section className="relative mb-8 overflow-hidden rounded-[1.75rem] border border-[#0b3d2e]/10 bg-[linear-gradient(135deg,#0b3d2e_0%,#145c45_48%,#1f7a5c_100%)] p-6 text-[#e8f5ee] shadow-[0_20px_60px_-30px_rgba(11,61,46,0.65)] md:p-8">
+    <section className="relative mb-6 overflow-hidden rounded-[1.5rem] border border-[#0b3d2e]/10 bg-[linear-gradient(135deg,#0b3d2e_0%,#145c45_48%,#1f7a5c_100%)] p-5 text-[#e8f5ee] shadow-[0_20px_60px_-30px_rgba(11,61,46,0.65)] sm:mb-8 sm:rounded-[1.75rem] md:p-8">
       <div className="pointer-events-none absolute -right-10 top-0 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
       <div className="pointer-events-none absolute bottom-0 left-1/3 h-32 w-32 rounded-full bg-[#c9a227]/20 blur-2xl" />
       {eyebrow ? (
@@ -92,7 +92,7 @@ export function DashboardHero({
       ) : null}
       {arabic ? (
         <p
-          className="mt-3 text-right text-2xl leading-relaxed text-[#f4efe2] md:text-3xl"
+          className="mt-3 text-right text-xl leading-relaxed text-[#f4efe2] sm:text-2xl md:text-3xl"
           dir="rtl"
           lang="ar"
           style={{ fontFamily: "var(--font-arabic), serif" }}
@@ -101,12 +101,12 @@ export function DashboardHero({
         </p>
       ) : null}
       <h2
-        className="mt-3 max-w-2xl text-3xl text-white md:text-4xl"
+        className="mt-3 max-w-2xl text-2xl text-white sm:text-3xl md:text-4xl"
         style={{ fontFamily: "var(--font-display), serif" }}
       >
         {title}
       </h2>
-      <p className="mt-2 max-w-xl text-sm text-[#c5e0d2] md:text-base">
+      <p className="mt-2 max-w-xl text-sm leading-relaxed text-[#c5e0d2] md:text-base">
         {subtitle}
       </p>
     </section>

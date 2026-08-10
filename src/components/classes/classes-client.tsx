@@ -156,7 +156,7 @@ export function ClassesClient({
                   <select
                     name="class_id"
                     required
-                    className="h-9 w-full rounded-lg border border-input bg-background px-2"
+                    className="h-10 w-full rounded-lg border border-input bg-background px-2 md:h-9"
                     value={classId}
                     onChange={(e) => setClassId(e.target.value)}
                   >

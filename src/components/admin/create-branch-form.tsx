@@ -52,7 +52,7 @@ export function CreateBranchForm({ vendors }: { vendors: VendorOption[] }) {
           id="vendor_id"
           name="vendor_id"
           required
-          className="h-9 w-full rounded-lg border border-input bg-background px-2 text-sm"
+          className="h-10 w-full rounded-lg border border-input bg-background px-2 text-sm md:h-9"
         >
           <option value="">Select vendor</option>
           {vendors.map((v) => (

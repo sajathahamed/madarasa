@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { DM_Sans, Source_Serif_4 } from "next/font/google";
 
 import { Toaster } from "@/components/ui/sonner";
@@ -19,6 +19,12 @@ export const metadata: Metadata = {
   title: "Madarasa",
   description:
     "Multi-vendor madrasa management with double-entry books and two-step approvals",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

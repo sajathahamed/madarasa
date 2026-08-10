@@ -116,7 +116,7 @@ export function ProgressClient({
                 <Label>Class (optional)</Label>
                 <select
                   name="class_id"
-                  className="h-9 w-full rounded-lg border border-input bg-background px-2"
+                  className="h-10 w-full rounded-lg border border-input bg-background px-2 md:h-9"
                 >
                   <option value="">—</option>
                   {classes.map((c) => (
@@ -131,7 +131,7 @@ export function ProgressClient({
                 <select
                   value={stream}
                   onChange={(e) => setStream(e.target.value as IslamicStream)}
-                  className="h-9 w-full rounded-lg border border-input bg-background px-2"
+                  className="h-10 w-full rounded-lg border border-input bg-background px-2 md:h-9"
                 >
                   <option value="qaida">Qaida</option>
                   <option value="nazirah">Nazirah</option>
@@ -143,7 +143,7 @@ export function ProgressClient({
                   <Label>Hifz component</Label>
                   <select
                     name="hifz_component"
-                    className="h-9 w-full rounded-lg border border-input bg-background px-2"
+                    className="h-10 w-full rounded-lg border border-input bg-background px-2 md:h-9"
                     defaultValue="sabaq"
                   >
                     <option value="sabaq">Sabaq</option>

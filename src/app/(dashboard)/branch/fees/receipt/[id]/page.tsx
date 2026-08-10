@@ -43,9 +43,9 @@ export default async function ReceiptPage({
 
   return (
     <OpsShell profile={profile} title="Payment receipt">
-      <article className="mx-auto max-w-lg rounded-xl border border-[#0b3d2e]/15 bg-white p-8 print:border-0">
+      <article className="mx-auto max-w-lg rounded-xl border border-[#0b3d2e]/15 bg-white p-4 sm:p-8 print:border-0 print:p-0">
         <header className="mb-6 border-b border-[#0b3d2e]/10 pb-4">
-          <p className="text-2xl text-[#0b3d2e]" style={{ fontFamily: "serif" }}>
+          <p className="text-xl text-[#0b3d2e] sm:text-2xl" style={{ fontFamily: "serif" }}>
             {vendor?.name || "Madarasa"}
           </p>
           <p className="text-sm text-[#5a6f65]">{branch?.name}</p>
@@ -53,34 +53,34 @@ export default async function ReceiptPage({
             Receipt #{payment.id.slice(0, 8)}
           </p>
         </header>
-        <dl className="space-y-2 text-sm">
-          <div className="flex justify-between">
+        <dl className="space-y-3 text-sm">
+          <div className="flex flex-wrap items-start justify-between gap-2">
             <dt className="text-[#5a6f65]">Student</dt>
-            <dd>{student?.full_name}</dd>
+            <dd className="text-right break-words">{student?.full_name}</dd>
           </div>
-          <div className="flex justify-between">
+          <div className="flex flex-wrap items-start justify-between gap-2">
             <dt className="text-[#5a6f65]">Admission</dt>
             <dd>{student?.admission_no}</dd>
           </div>
-          <div className="flex justify-between">
+          <div className="flex flex-wrap items-start justify-between gap-2">
             <dt className="text-[#5a6f65]">Guardian</dt>
-            <dd>{student?.guardian_name}</dd>
+            <dd className="text-right break-words">{student?.guardian_name}</dd>
           </div>
-          <div className="flex justify-between">
+          <div className="flex flex-wrap items-start justify-between gap-2">
             <dt className="text-[#5a6f65]">Amount</dt>
             <dd className="text-lg font-medium">
               {formatMoney(Number(payment.amount))}
             </dd>
           </div>
-          <div className="flex justify-between">
+          <div className="flex flex-wrap items-start justify-between gap-2">
             <dt className="text-[#5a6f65]">Method</dt>
             <dd>{payment.method}</dd>
           </div>
-          <div className="flex justify-between">
+          <div className="flex flex-wrap items-start justify-between gap-2">
             <dt className="text-[#5a6f65]">Date</dt>
             <dd>{formatDate(payment.created_at)}</dd>
           </div>
-          <div className="flex justify-between">
+          <div className="flex flex-wrap items-start justify-between gap-2">
             <dt className="text-[#5a6f65]">Status</dt>
             <dd>Approved</dd>
           </div>

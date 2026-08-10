@@ -35,10 +35,10 @@ export function VendorStudentsTable({
 
   return (
     <section id="students" className="mt-8">
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
         <div>
           <h2
-            className="text-xl text-[#0b3d2e]"
+            className="text-lg text-[#0b3d2e] sm:text-xl"
             style={{ fontFamily: "var(--font-display), serif" }}
           >
             Students
@@ -49,25 +49,26 @@ export function VendorStudentsTable({
         </div>
         <StudentSearchInput value={q} onChange={setQ} />
       </div>
-      <div className="overflow-x-auto rounded-lg border border-[#0b3d2e]/10 bg-white/70">
-        <table className="w-full text-sm">
-          <thead className="bg-[#0b3d2e]/5 text-left">
-            <tr>
-              {[
-                "Admission",
-                "Name",
-                "Guardian",
-                "Phone",
-                "Branch",
-                "Status",
-                "Joined",
-              ].map((h) => (
-                <th key={h} className="px-3 py-2 font-medium">
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
+      <div className="-mx-4 overflow-x-auto overscroll-x-contain px-4 sm:mx-0 sm:px-0">
+        <div className="overflow-hidden rounded-lg border border-[#0b3d2e]/10 bg-white/70">
+          <table className="w-full min-w-[40rem] text-sm">
+            <thead className="bg-[#0b3d2e]/5 text-left">
+              <tr>
+                {[
+                  "Admission",
+                  "Name",
+                  "Guardian",
+                  "Phone",
+                  "Branch",
+                  "Status",
+                  "Joined",
+                ].map((h) => (
+                  <th key={h} className="whitespace-nowrap px-3 py-2.5 font-medium">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
           <tbody>
             {filtered.length === 0 ? (
               <EmptyRow colSpan={7}>
@@ -109,6 +110,7 @@ export function VendorStudentsTable({
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </section>
   );

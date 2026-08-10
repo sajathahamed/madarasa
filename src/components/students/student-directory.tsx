@@ -29,12 +29,12 @@ export function StudentDirectory({ students }: { students: Row[] }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <StudentSearchInput value={q} onChange={setQ} />
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value)}
-          className="h-9 rounded-lg border border-input bg-background px-2 text-sm"
+          className="h-10 w-full rounded-lg border border-input bg-background px-2 text-sm sm:w-auto md:h-9"
         >
           <option value="all">All statuses</option>
           <option value="active">Active</option>
@@ -43,46 +43,55 @@ export function StudentDirectory({ students }: { students: Row[] }) {
         </select>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-[#0b3d2e]/10 bg-white/70">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-[#0b3d2e]/10 text-[#5a6f65]">
-            <tr>
-              <th className="px-3 py-2 font-medium">Student</th>
-              <th className="px-3 py-2 font-medium">Admission</th>
-              <th className="px-3 py-2 font-medium">Guardian</th>
-              <th className="px-3 py-2 font-medium">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((s) => (
-              <tr key={s.id} className="border-b border-[#0b3d2e]/5">
-                <td className="px-3 py-2">
-                  <Link
-                    href={`/branch/students/${s.id}`}
-                    className="font-medium text-[#0b3d2e] underline"
-                  >
-                    {s.full_name}
-                  </Link>
-                  {s.branch_name ? (
-                    <p className="text-xs text-[#5a6f65]">{s.branch_name}</p>
-                  ) : null}
-                </td>
-                <td className="px-3 py-2">{s.admission_no}</td>
-                <td className="px-3 py-2">{s.guardian_phone}</td>
-                <td className="px-3 py-2">
-                  <StatusBadge value={s.status} />
-                </td>
-              </tr>
-            ))}
-            {filtered.length === 0 ? (
+      <div className="-mx-4 overflow-x-auto overscroll-x-contain px-4 sm:mx-0 sm:px-0">
+        <div className="overflow-hidden rounded-xl border border-[#0b3d2e]/10 bg-white/70">
+          <table className="w-full min-w-[28rem] text-left text-sm">
+            <thead className="border-b border-[#0b3d2e]/10 text-[#5a6f65]">
               <tr>
-                <td colSpan={4} className="px-3 py-6 text-[#5a6f65]">
-                  No students match.
-                </td>
+                <th className="px-3 py-2.5 font-medium">Student</th>
+                <th className="px-3 py-2.5 font-medium">Admission</th>
+                <th className="hidden px-3 py-2.5 font-medium sm:table-cell">
+                  Guardian
+                </th>
+                <th className="px-3 py-2.5 font-medium">Status</th>
               </tr>
-            ) : null}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filtered.map((s) => (
+                <tr key={s.id} className="border-b border-[#0b3d2e]/5">
+                  <td className="px-3 py-3">
+                    <Link
+                      href={`/branch/students/${s.id}`}
+                      className="font-medium text-[#0b3d2e] underline"
+                    >
+                      {s.full_name}
+                    </Link>
+                    {s.branch_name ? (
+                      <p className="text-xs text-[#5a6f65]">{s.branch_name}</p>
+                    ) : null}
+                    <p className="mt-0.5 text-xs text-[#5a6f65] sm:hidden">
+                      {s.guardian_phone}
+                    </p>
+                  </td>
+                  <td className="px-3 py-3">{s.admission_no}</td>
+                  <td className="hidden px-3 py-3 sm:table-cell">
+                    {s.guardian_phone}
+                  </td>
+                  <td className="px-3 py-3">
+                    <StatusBadge value={s.status} />
+                  </td>
+                </tr>
+              ))}
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-3 py-6 text-[#5a6f65]">
+                    No students match.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

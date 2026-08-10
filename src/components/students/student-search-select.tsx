@@ -59,7 +59,7 @@ export function StudentSearchSelect({
         required={required}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="h-9 w-full rounded-lg border border-input bg-background px-2 text-sm"
+        className="h-10 w-full rounded-lg border border-input bg-background px-2 text-sm md:h-9"
       >
         <option value="">{emptyLabel}</option>
         {options.map((s) => (

@@ -113,20 +113,23 @@ export default async function ParentPage({
           "linear-gradient(180deg, #f4f8f5 0%, #eef3f0 40%, #e8eee9 100%)",
       }}
     >
-      <div className="mb-6 flex items-start justify-between gap-3">
-        <div>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
           <p className="text-sm text-[#5a6f65]">Parent portal</p>
-          <h1 className="text-3xl text-[#0b3d2e]" style={{ fontFamily: "serif" }}>
+          <h1
+            className="break-words text-2xl text-[#0b3d2e] sm:text-3xl"
+            style={{ fontFamily: "serif" }}
+          >
             {student.full_name}
           </h1>
           <p className="text-sm text-[#5a6f65]">
             {student.admission_no} · {student.guardian_name}
           </p>
         </div>
-        <form action={parentLogoutAction}>
+        <form action={parentLogoutAction} className="shrink-0">
           <button
             type="submit"
-            className="rounded-lg border border-[#0b3d2e]/20 px-3 py-1.5 text-sm"
+            className="min-h-10 rounded-lg border border-[#0b3d2e]/20 px-4 py-2 text-sm"
           >
             Sign out
           </button>
@@ -137,11 +140,14 @@ export default async function ParentPage({
         <h2 className="mb-3 font-medium text-[#0b3d2e]">Fees</h2>
         <ul className="space-y-2 text-sm">
           {(dues ?? []).map((d, i) => (
-            <li key={i} className="flex justify-between">
-              <span>
+            <li
+              key={i}
+              className="flex flex-wrap items-start justify-between gap-2"
+            >
+              <span className="min-w-0">
                 {d.due_month}/{d.due_year} · {d.status}
               </span>
-              <span>
+              <span className="shrink-0 tabular-nums">
                 {formatMoney(Number(d.amount_paid))} /{" "}
                 {formatMoney(Number(d.total_due))}
               </span>
@@ -154,11 +160,16 @@ export default async function ParentPage({
         <h3 className="mb-2 mt-4 text-sm font-medium">Payments</h3>
         <ul className="space-y-2 text-sm">
           {(payments ?? []).map((p, i) => (
-            <li key={i} className="flex justify-between">
-              <span>
+            <li
+              key={i}
+              className="flex flex-wrap items-start justify-between gap-2"
+            >
+              <span className="min-w-0 break-words">
                 {formatDate(p.created_at)} · {p.method} · {p.status}
               </span>
-              <span>{formatMoney(Number(p.amount))}</span>
+              <span className="shrink-0 tabular-nums">
+                {formatMoney(Number(p.amount))}
+              </span>
             </li>
           ))}
         </ul>

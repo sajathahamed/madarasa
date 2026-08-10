@@ -463,8 +463,11 @@ export function AccountantDeskClient({
             placeholder="Search dues by student name or ID…"
             className="max-w-none"
           />
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+          <p className="text-xs text-[#5a6f65] md:hidden">
+            Swipe sideways to see all columns
+          </p>
+          <div className="-mx-4 overflow-x-auto overscroll-x-contain px-4 sm:mx-0 sm:px-0">
+            <table className="w-full min-w-[44rem] text-left text-sm">
               <thead className="border-b border-[#0b3d2e]/10 text-[#5a6f65]">
                 <tr>
                   <th className="px-2 py-2"></th>

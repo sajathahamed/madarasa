@@ -71,7 +71,7 @@ export function RecordPaymentForm({
         <select
           id="fee_due_id"
           name="fee_due_id"
-          className="h-9 w-full rounded-lg border border-input bg-background px-2 text-sm"
+          className="h-10 w-full rounded-lg border border-input bg-background px-2 text-sm md:h-9"
         >
           <option value="">None</option>
           {studentDues.map((d) => (
@@ -91,7 +91,7 @@ export function RecordPaymentForm({
         <select
           id="method"
           name="method"
-          className="h-9 w-full rounded-lg border border-input bg-background px-2 text-sm"
+          className="h-10 w-full rounded-lg border border-input bg-background px-2 text-sm md:h-9"
           defaultValue="cash"
         >
           <option value="cash">Cash</option>

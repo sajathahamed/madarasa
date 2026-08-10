@@ -213,7 +213,7 @@ export function StudentProfileClient({
                 name="status"
                 defaultValue={student.status}
                 disabled={!canEdit}
-                className="h-9 w-full rounded-lg border border-input bg-background px-2"
+                className="h-10 w-full rounded-lg border border-input bg-background px-2 md:h-9"
               >
                 <option value="active">Active</option>
                 <option value="left">Left</option>
@@ -373,7 +373,7 @@ export function StudentProfileClient({
               {dues.map((d) => (
                 <li
                   key={d.id}
-                  className="flex justify-between rounded-lg border border-[#0b3d2e]/10 px-3 py-2"
+                  className="flex flex-wrap items-start justify-between gap-2 rounded-lg border border-[#0b3d2e]/10 px-3 py-2"
                 >
                   <span>
                     {d.due_month}/{d.due_year} · {d.status}
@@ -398,7 +398,7 @@ export function StudentProfileClient({
               {payments.map((p) => (
                 <li
                   key={p.id}
-                  className="flex justify-between rounded-lg border border-[#0b3d2e]/10 px-3 py-2"
+                  className="flex flex-wrap items-start justify-between gap-2 rounded-lg border border-[#0b3d2e]/10 px-3 py-2"
                 >
                   <span>
                     {formatDate(p.created_at)} · {p.method} · {p.status}

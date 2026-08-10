@@ -87,11 +87,11 @@ export function FeesOfficeClient({
     <div className="space-y-6">
       {message ? <p className="text-sm">{message}</p> : null}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
         {canGenerate ? (
           <Button
             type="button"
-            className="bg-[#0b3d2e]"
+            className="w-full bg-[#0b3d2e] sm:w-auto"
             pending={pending && pendingAction === "generate"}
             pendingLabel="Generating…"
             disabled={pending}
@@ -114,6 +114,7 @@ export function FeesOfficeClient({
           <Button
             type="button"
             variant="outline"
+            className="w-full sm:w-auto"
             pending={pending && pendingAction === "bulk"}
             pendingLabel="Sending…"
             disabled={pending || selected.length === 0}
@@ -177,43 +178,46 @@ export function FeesOfficeClient({
                 return (
                   <li
                     key={d.id}
-                    className="flex items-start gap-2 rounded-lg border border-[#0b3d2e]/10 p-3"
+                    className="flex flex-col gap-3 rounded-lg border border-[#0b3d2e]/10 p-3 sm:flex-row sm:items-start sm:gap-2"
                   >
-                    <input
-                      type="checkbox"
-                      className="mt-1"
-                      checked={checked}
-                      onChange={(e) => {
-                        setSelected((prev) =>
-                          e.target.checked
-                            ? [...prev, d.id]
-                            : prev.filter((x) => x !== d.id),
-                        );
-                      }}
-                    />
-                    <div className="flex-1">
-                      <Link
-                        href={`/branch/students/${d.student_id}`}
-                        className="font-medium text-[#0b3d2e] underline"
-                      >
-                        {d.student_name || d.student_id.slice(0, 8)}
-                      </Link>
-                      {admission ? (
-                        <p className="text-xs text-[#5a6f65]">{admission}</p>
-                      ) : null}
-                      <p className="text-[#5a6f65]">
-                        {d.due_month}/{d.due_year} · {d.status}
-                        {d.carried_forward
-                          ? ` · carried ${formatMoney(d.carried_forward)}`
-                          : ""}{" "}
-                        · due {formatMoney(bal)}
-                      </p>
+                    <div className="flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        className="mt-1 size-4 shrink-0"
+                        checked={checked}
+                        onChange={(e) => {
+                          setSelected((prev) =>
+                            e.target.checked
+                              ? [...prev, d.id]
+                              : prev.filter((x) => x !== d.id),
+                          );
+                        }}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <Link
+                          href={`/branch/students/${d.student_id}`}
+                          className="font-medium break-words text-[#0b3d2e] underline"
+                        >
+                          {d.student_name || d.student_id.slice(0, 8)}
+                        </Link>
+                        {admission ? (
+                          <p className="text-xs text-[#5a6f65]">{admission}</p>
+                        ) : null}
+                        <p className="text-[#5a6f65]">
+                          {d.due_month}/{d.due_year} · {d.status}
+                          {d.carried_forward
+                            ? ` · carried ${formatMoney(d.carried_forward)}`
+                            : ""}{" "}
+                          · due {formatMoney(bal)}
+                        </p>
+                      </div>
                     </div>
                     {canRemind ? (
                       <Button
                         type="button"
                         size="sm"
                         variant="outline"
+                        className="w-full shrink-0 sm:w-auto"
                         pending={pending && pendingAction === d.id}
                         pendingLabel="…"
                         disabled={pending}
