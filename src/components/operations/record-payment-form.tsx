@@ -39,7 +39,8 @@ export function RecordPaymentForm({
       className="space-y-3"
       onSubmit={(e) => {
         e.preventDefault();
-        const fd = new FormData(e.currentTarget);
+        const form = e.currentTarget;
+        const fd = new FormData(form);
         startTransition(async () => {
           const result = await recordPaymentAction({
             student_id: studentId,
@@ -54,7 +55,7 @@ export function RecordPaymentForm({
           });
           setMessage(result.error ? result.error : "Payment submitted for review");
           if (!result.error) {
-            e.currentTarget.reset();
+            form.reset();
             setStudentId("");
           }
         });

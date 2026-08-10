@@ -80,7 +80,8 @@ export function ProgressClient({
               className="space-y-3"
               onSubmit={(e) => {
                 e.preventDefault();
-                const fd = new FormData(e.currentTarget);
+                const form = e.currentTarget;
+                const fd = new FormData(form);
                 startTransition(async () => {
                   const result = await logIslamicProgressAction({
                     student_id: studentId,
@@ -98,7 +99,7 @@ export function ProgressClient({
                   });
                   setMessage(result.error ? result.error : "Progress logged");
                   if (!result.error) {
-                    e.currentTarget.reset();
+                    form.reset();
                     setStudentId("");
                     router.refresh();
                   }

@@ -79,7 +79,8 @@ export function ClassesClient({
                 className="space-y-3"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  const fd = new FormData(e.currentTarget);
+                  const form = e.currentTarget;
+                  const fd = new FormData(form);
                   setPendingAction("create");
                   startTransition(async () => {
                     try {
@@ -92,7 +93,7 @@ export function ClassesClient({
                       });
                       setMessage(result.error ? result.error : "Class created");
                       if (!result.error) {
-                        e.currentTarget.reset();
+                        form.reset();
                         router.refresh();
                       }
                     } finally {

@@ -31,7 +31,8 @@ export function CreateStudentForm({
       className="grid gap-3 sm:grid-cols-2"
       onSubmit={(e) => {
         e.preventDefault();
-        const fd = new FormData(e.currentTarget);
+        const form = e.currentTarget;
+        const fd = new FormData(form);
         startTransition(async () => {
           const result = await createStudentAction({
             vendor_id: vendorId,
@@ -56,7 +57,7 @@ export function CreateStudentForm({
               String(fd.get("emergency_contact_phone") ?? "") || undefined,
           });
           setMessage(result.error ? result.error : "Student created");
-          if (!result.error) e.currentTarget.reset();
+          if (!result.error) form.reset();
         });
       }}
     >

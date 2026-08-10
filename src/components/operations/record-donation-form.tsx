@@ -30,7 +30,8 @@ export function RecordDonationForm({
       className="grid gap-3 sm:grid-cols-2"
       onSubmit={(e) => {
         e.preventDefault();
-        const fd = new FormData(e.currentTarget);
+        const form = e.currentTarget;
+        const fd = new FormData(form);
         startTransition(async () => {
           const result = await recordDonationAction({
             vendor_id: vendorId,
@@ -42,7 +43,7 @@ export function RecordDonationForm({
             bank_reference: String(fd.get("bank_reference") ?? "") || undefined,
           });
           setMessage(result.error ? result.error : "Donation submitted for review");
-          if (!result.error) e.currentTarget.reset();
+          if (!result.error) form.reset();
         });
       }}
     >
