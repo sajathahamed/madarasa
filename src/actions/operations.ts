@@ -221,30 +221,87 @@ export async function recordPaymentAction(input: z.infer<typeof paymentSchema>) 
       };
     }
 
-    // Optional SMS confirm (same path as former approval notify)
-    if (
-      student.guardian_phone &&
-      process.env.PAYMENT_CONFIRM_ON_APPROVAL_ONLY !== "false"
-    ) {
-      try {
-        const { notifyPaymentConfirmation } = await import("@/lib/notify");
-        await notifyPaymentConfirmation({
-          to: student.guardian_phone,
-          studentName: student.full_name,
-          amount: String(parsed.data.amount),
-          vendorId: student.vendor_id,
-          studentId: student.id,
-        });
-      } catch (waErr) {
-        console.error("[payment notify]", waErr);
-      }
-    }
-
-    return { ok: true as const, paymentId: payment.id, applied: true as const };
+    // SMS is optional — UI asks after payment succeeds.
+    return {
+      ok: true as const,
+      paymentId: payment.id,
+      applied: true as const,
+      studentName: student.full_name,
+      amount: parsed.data.amount,
+      guardianPhone: student.guardian_phone,
+      vendorId: student.vendor_id,
+      studentId: student.id,
+    };
   } catch (err) {
     console.error("[recordPaymentAction]", err);
     return {
       error: err instanceof Error ? err.message : "Failed to record payment",
+    };
+  }
+}
+
+export async function sendPaymentConfirmSmsAction(opts: {
+  studentId: string;
+  amount: number;
+  message?: string;
+}) {
+  try {
+    const auth = await requireProfile();
+    if ("error" in auth) return { error: auth.error };
+    if (
+      !["super_admin", "vendor_admin", "data_entry", "accountant", "principal"].includes(
+        auth.profile.role,
+      )
+    ) {
+      return { error: "Forbidden" };
+    }
+
+    const { data: student } = await auth.supabase
+      .from("students")
+      .select("id, full_name, guardian_phone, vendor_id")
+      .eq("id", opts.studentId)
+      .maybeSingle();
+
+    if (!student) return { error: "Student not found" };
+    if (!student.guardian_phone) {
+      return { error: "No guardian phone on this student" };
+    }
+
+    const amountText = Number(opts.amount).toLocaleString("en-LK", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    const defaultMsg = `Madarasa: Payment of ${amountText} for ${student.full_name} has been received. JazakAllah khair.`;
+    const message = (opts.message || defaultMsg).trim();
+    if (!message) return { error: "Message is required" };
+
+    const { sendDialogSms, isDialogSmsConfigured } = await import(
+      "@/lib/sms/dialog"
+    );
+    if (!isDialogSmsConfigured()) {
+      return { error: "Dialog SMS (Upview Tech) is not configured" };
+    }
+
+    const result = await sendDialogSms({
+      to: student.guardian_phone,
+      message,
+      vendorId: student.vendor_id,
+      studentId: student.id,
+      purpose: "payment_confirmation",
+    });
+
+    if (!result.ok) {
+      return { error: result.error || "SMS failed" };
+    }
+    return {
+      ok: true as const,
+      message: "SMS sent (Upview Tech)",
+      phone: student.guardian_phone,
+    };
+  } catch (err) {
+    console.error("[sendPaymentConfirmSmsAction]", err);
+    return {
+      error: err instanceof Error ? err.message : "Failed to send SMS",
     };
   }
 }
