@@ -9,6 +9,10 @@ import {
 import { requireOpsContext } from "@/lib/ops-page";
 import { formatMoney, pendingMonthsFromAmount } from "@/lib/format";
 import {
+  brandingForVendorName,
+  displayVendorName,
+} from "@/lib/vendor-branding";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -133,6 +137,8 @@ export default async function ReportsPage() {
         );
 
   let vendorName = "Madarasa";
+  let vendorNameAr: string | null = null;
+  let logoUrl: string | null = null;
   let branchName = "Branch";
   if (profile.vendor_id) {
     const { data: vendor } = await supabase
@@ -140,7 +146,12 @@ export default async function ReportsPage() {
       .select("name")
       .eq("id", profile.vendor_id)
       .maybeSingle();
-    if (vendor?.name) vendorName = vendor.name;
+    if (vendor?.name) {
+      const branding = brandingForVendorName(vendor.name);
+      vendorName = displayVendorName(vendor.name);
+      vendorNameAr = branding?.nameAr ?? null;
+      logoUrl = branding?.logoUrl ?? null;
+    }
   }
   if (profile.branch_id) {
     const { data: branch } = await supabase
@@ -153,6 +164,8 @@ export default async function ReportsPage() {
 
   const reportData: PrincipalReportData = {
     vendorName,
+    vendorNameAr,
+    logoUrl,
     branchName,
     principalName: profile.full_name,
     month,

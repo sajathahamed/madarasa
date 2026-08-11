@@ -2,6 +2,8 @@ import { formatMoney, formatPendingMonths } from "@/lib/format";
 
 export type PrincipalReportData = {
   vendorName: string;
+  vendorNameAr?: string | null;
+  logoUrl?: string | null;
   branchName: string;
   principalName: string;
   month: number;
@@ -72,13 +74,35 @@ export function PrincipalReportDocument({ data }: { data: PrincipalReportData })
       className="rounded-xl border border-[#0b3d2e]/15 bg-white p-4 sm:p-8 print:border-0 print:p-0 print:shadow-none"
     >
       <header className="mb-6 border-b border-[#0b3d2e]/10 pb-4">
-        <p
-          className="text-xl text-[#0b3d2e] sm:text-2xl"
-          style={{ fontFamily: "var(--font-display), serif" }}
-        >
-          {data.vendorName}
-        </p>
-        <p className="text-sm text-[#5a6f65]">{data.branchName}</p>
+        <div className="flex items-center gap-3">
+          {data.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={data.logoUrl}
+              alt={data.vendorName}
+              className="h-14 w-14 shrink-0 rounded-full object-cover"
+            />
+          ) : null}
+          <div className="min-w-0">
+            <p
+              className="text-lg leading-snug text-[#0b3d2e] sm:text-xl"
+              style={{ fontFamily: "var(--font-display), serif" }}
+            >
+              {data.vendorName}
+            </p>
+            {data.vendorNameAr ? (
+              <p
+                className="mt-0.5 text-base text-[#0b3d2e]/80"
+                dir="rtl"
+                lang="ar"
+                style={{ fontFamily: "var(--font-arabic), serif" }}
+              >
+                {data.vendorNameAr}
+              </p>
+            ) : null}
+            <p className="text-sm text-[#5a6f65]">{data.branchName}</p>
+          </div>
+        </div>
         <h2 className="mt-3 text-lg font-medium text-[#0b3d2e] sm:text-xl">
           Monthly principal report — {periodLabel}
         </h2>

@@ -21,6 +21,7 @@ import { ToggleUserStatusButton } from "@/components/admin/status-toggles";
 import { ResetPasswordButton } from "@/components/admin/reset-password-button";
 import { notificationStatus } from "@/lib/notify";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { brandingForVendorName } from "@/lib/vendor-branding";
 
 export default async function VendorDashboardPage() {
   const supabase = await createClient();
@@ -181,11 +182,16 @@ export default async function VendorDashboardPage() {
     console.error("[vendor listUsers]", err);
   }
 
+  const branding = brandingForVendorName(vendor?.name);
+  const vendorTitle =
+    branding?.nameEn ?? vendor?.name ?? "Vendor dashboard";
+
   return (
     <AppShell
       profile={profile!}
-      title={vendor?.name ?? "Vendor dashboard"}
+      title={vendorTitle}
       subtitle="Your madrasa command centre"
+      branding={branding}
       nav={[
         { href: "/vendor", label: "Overview" },
         { href: "/vendor#staff", label: "Staff" },
@@ -198,8 +204,8 @@ export default async function VendorDashboardPage() {
     >
       <DashboardHero
         eyebrow={vendor?.status === "active" ? "Active madrasa" : "Madrasa"}
-        arabic="ٱهْدِنَا ٱلصِّرَٰطَ ٱلْمُسْتَقِيمَ"
-        title={vendor?.name ?? "Vendor dashboard"}
+        arabic={branding?.nameAr ?? "ٱهْدِنَا ٱلصِّرَٰطَ ٱلْمُسْتَقِيمَ"}
+        title={vendorTitle}
         subtitle={`Full visibility for students, staff, fees, and ledger · ${process.env.NEXT_PUBLIC_CURRENCY ?? "LKR"}${notificationStatus().dialogConfigured ? " · Dialog SMS ready" : " · SMS ready when Dialog creds arrive"}`}
       />
 

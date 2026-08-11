@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ToggleVendorStatusButton } from "@/components/admin/status-toggles";
+import { brandingForVendorName } from "@/lib/vendor-branding";
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -75,11 +76,13 @@ export default async function SuperAdminVendorDetailPage({ params }: PageProps) 
 
   const branchMap = new Map((branches ?? []).map((b) => [b.id, b.name]));
   const studentMap = new Map((studentRows ?? []).map((s) => [s.id, s.full_name]));
+  const branding = brandingForVendorName(vendor.name);
 
   return (
     <AppShell
       profile={profile!}
-      title={vendor.name}
+      title={branding?.nameEn ?? vendor.name}
+      branding={branding}
       nav={[
         { href: "/super-admin", label: "Dashboard" },
         { href: `/super-admin/vendors/${id}`, label: "Vendor" },
