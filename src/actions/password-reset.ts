@@ -13,8 +13,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const VERIFY_WINDOW_MS = 15 * 60 * 1000; // after verify, 15 min to set password
 const MAX_REQUESTS_PER_HOUR = 5;
-const GENERIC_OK =
-  "If an account exists for that email and a phone number is on file, an OTP was sent by SMS.";
 
 function hashOtp(code: string) {
   return createHash("sha256").update(code).digest("hex");
@@ -30,50 +28,12 @@ function generateOtp() {
   return String(randomInt(100000, 1000000));
 }
 
-async function resolveUserPhone(
-  admin: ReturnType<typeof createAdminClient>,
-  userId: string,
-  email: string,
-): Promise<string | null> {
-  const { data: profile } = await admin
-    .from("app_users")
-    .select("phone, whatsapp_number, status")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (!profile || profile.status !== "active") {
-    return null;
-  }
-
-  const candidates = [
-    profile.phone,
-    profile.whatsapp_number,
-  ];
-
-  for (const raw of candidates) {
-    const phone = (raw || "").trim();
-    if (phone && isValidMobile(phone)) return phone;
-  }
-
-  // Fallback: staff directory row with the same email
-  const { data: staff } = await admin
-    .from("staff_members")
-    .select("phone")
-    .ilike("email", email.trim())
-    .eq("status", "active")
-    .not("phone", "is", null)
-    .limit(5);
-
-  for (const row of staff ?? []) {
-    const phone = (row.phone || "").trim();
-    if (phone && isValidMobile(phone)) return phone;
-  }
-
-  return null;
-}
-
 const requestSchema = z.object({
-  email: z.string().email(),
+  phone: z
+    .string()
+    .trim()
+    .min(9, "Enter a valid phone number")
+    .refine((v) => isValidMobile(v), "Enter a valid phone number"),
 });
 
 const verifySchema = z.object({
@@ -87,24 +47,31 @@ const completeSchema = z.object({
   confirmPassword: z.string().min(6),
 });
 
+type PhoneLookupRow = {
+  id: string;
+  phone: string | null;
+  email: string | null;
+};
+
 export type PasswordResetRequestResult =
   | {
       ok: true;
       resetId?: string;
       maskedPhone?: string;
       message: string;
-      /** True when the account exists but has no usable phone. */
-      noPhone?: boolean;
     }
   | { error: string };
 
 export async function requestPasswordResetOtpAction(input: {
-  email: string;
+  phone: string;
 }): Promise<PasswordResetRequestResult> {
   try {
     const parsed = requestSchema.safeParse(input);
     if (!parsed.success) {
-      return { error: "Enter a valid email address" };
+      return {
+        error:
+          parsed.error.issues[0]?.message || "Enter a valid phone number",
+      };
     }
 
     if (!isDialogSmsConfigured()) {
@@ -124,96 +91,225 @@ export async function requestPasswordResetOtpAction(input: {
       };
     }
 
-    const email = parsed.data.email.trim().toLowerCase();
+    const rawPhone = parsed.data.phone.trim();
+    const normalizedPhone = toWhatsAppMsIsdn(rawPhone);
 
-    const { data: authRows, error: lookupError } = await admin.rpc(
-      "lookup_auth_user_by_email",
-      { p_email: email },
+    const { data: lookupRows, error: lookupError } = await admin.rpc(
+      "lookup_app_user_by_phone",
+      { p_phone: rawPhone },
     );
 
     if (lookupError) {
       console.error("[requestPasswordResetOtp] lookup", lookupError);
-      return { error: "Unable to process reset request right now" };
+      // Fallback: app-level scan if RPC is not applied yet
+      const fallback = await lookupAppUserByPhoneFallback(admin, normalizedPhone);
+      if (fallback.error) {
+        return { error: fallback.error };
+      }
+      if (!fallback.user) {
+        return await phoneNotFoundResult(admin, rawPhone, normalizedPhone);
+      }
+      return await issueOtp(admin, fallback.user, normalizedPhone);
     }
 
-    const authUser = Array.isArray(authRows) ? authRows[0] : null;
+    const authUser = (
+      Array.isArray(lookupRows) ? lookupRows[0] : null
+    ) as PhoneLookupRow | null;
 
     if (!authUser?.id) {
-      // Do not reveal whether the email exists.
-      return { ok: true, message: GENERIC_OK };
+      return await phoneNotFoundResult(admin, rawPhone, normalizedPhone);
     }
 
-    const phone = await resolveUserPhone(admin, authUser.id, email);
-    if (!phone) {
-      return {
-        ok: true,
-        noPhone: true,
-        message:
-          "This account has no phone number on file. Ask an administrator to add a phone under your user profile, then try again.",
-      };
-    }
-
-    const hourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    const { count } = await admin
-      .from("password_reset_otps")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", authUser.id)
-      .gte("created_at", hourAgo);
-
-    if ((count ?? 0) >= MAX_REQUESTS_PER_HOUR) {
-      return {
-        error: "Too many reset attempts. Please wait and try again later.",
-      };
-    }
-
-    const code = generateOtp();
-    const expiresAt = new Date(Date.now() + OTP_TTL_MS).toISOString();
-
-    const { data: row, error: insertError } = await admin
-      .from("password_reset_otps")
-      .insert({
-        user_id: authUser.id,
-        email,
-        phone: toWhatsAppMsIsdn(phone),
-        code_hash: hashOtp(code),
-        expires_at: expiresAt,
-      })
-      .select("id")
-      .single();
-
-    if (insertError || !row) {
-      console.error("[requestPasswordResetOtp] insert", insertError);
-      return { error: "Could not create reset request" };
-    }
-
-    const sms = await sendDialogSms({
-      to: phone,
-      message: `Madarasa password reset OTP: ${code}. Valid for 10 minutes. Do not share this code.`,
-      purpose: "password_reset_otp",
-    });
-
-    if (!sms.ok) {
-      await admin
-        .from("password_reset_otps")
-        .update({ consumed_at: new Date().toISOString() })
-        .eq("id", row.id);
-      return {
-        error: sms.error || "Failed to send OTP SMS. Try again shortly.",
-      };
-    }
-
-    return {
-      ok: true,
-      resetId: row.id,
-      maskedPhone: maskPhone(phone),
-      message: `OTP sent by SMS to ${maskPhone(phone)}.`,
-    };
+    return await issueOtp(
+      admin,
+      {
+        id: authUser.id,
+        email: authUser.email,
+        phone: authUser.phone || normalizedPhone,
+      },
+      normalizedPhone,
+    );
   } catch (err) {
     console.error("[requestPasswordResetOtpAction]", err);
     return {
       error: err instanceof Error ? err.message : "Failed to request OTP",
     };
   }
+}
+
+async function phoneNotFoundResult(
+  admin: ReturnType<typeof createAdminClient>,
+  rawPhone: string,
+  normalizedPhone: string,
+): Promise<PasswordResetRequestResult> {
+  const { data: staffExists, error: staffError } = await admin.rpc(
+    "staff_phone_exists",
+    { p_phone: rawPhone },
+  );
+
+  if (!staffError && staffExists === true) {
+    return {
+      error:
+        "This phone is on a staff record but has no login account. Ask an administrator to create a user login.",
+    };
+  }
+
+  if (staffError) {
+    // Fallback staff check if RPC missing
+    const staffHit = await staffPhoneExistsFallback(admin, normalizedPhone);
+    if (staffHit) {
+      return {
+        error:
+          "This phone is on a staff record but has no login account. Ask an administrator to create a user login.",
+      };
+    }
+  }
+
+  return {
+    error: "No account found for that phone number.",
+  };
+}
+
+async function issueOtp(
+  admin: ReturnType<typeof createAdminClient>,
+  user: { id: string; email: string | null; phone: string },
+  normalizedPhone: string,
+): Promise<PasswordResetRequestResult> {
+  const hourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const { count: byUser } = await admin
+    .from("password_reset_otps")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .gte("created_at", hourAgo);
+
+  const { count: byPhone } = await admin
+    .from("password_reset_otps")
+    .select("id", { count: "exact", head: true })
+    .eq("phone", normalizedPhone)
+    .gte("created_at", hourAgo);
+
+  if (
+    (byUser ?? 0) >= MAX_REQUESTS_PER_HOUR ||
+    (byPhone ?? 0) >= MAX_REQUESTS_PER_HOUR
+  ) {
+    return {
+      error: "Too many reset attempts. Please wait and try again later.",
+    };
+  }
+
+  let email = (user.email || "").trim().toLowerCase();
+  if (!email) {
+    const { data: authUser, error: authError } =
+      await admin.auth.admin.getUserById(user.id);
+    if (authError || !authUser.user?.email) {
+      return {
+        error:
+          "Login account is missing an email. Contact an administrator.",
+      };
+    }
+    email = authUser.user.email.toLowerCase();
+  }
+
+  const code = generateOtp();
+  const expiresAt = new Date(Date.now() + OTP_TTL_MS).toISOString();
+  const sendTo = user.phone || normalizedPhone;
+
+  const { data: row, error: insertError } = await admin
+    .from("password_reset_otps")
+    .insert({
+      user_id: user.id,
+      email,
+      phone: normalizedPhone,
+      code_hash: hashOtp(code),
+      expires_at: expiresAt,
+    })
+    .select("id")
+    .single();
+
+  if (insertError || !row) {
+    console.error("[requestPasswordResetOtp] insert", insertError);
+    return { error: "Could not create reset request" };
+  }
+
+  const sms = await sendDialogSms({
+    to: sendTo,
+    message: `Madarasa password reset OTP: ${code}. Valid for 10 minutes. Do not share this code.`,
+    purpose: "password_reset_otp",
+  });
+
+  if (!sms.ok) {
+    await admin
+      .from("password_reset_otps")
+      .update({ consumed_at: new Date().toISOString() })
+      .eq("id", row.id);
+    return {
+      error: sms.error || "Failed to send OTP SMS. Try again shortly.",
+    };
+  }
+
+  return {
+    ok: true,
+    resetId: row.id,
+    maskedPhone: maskPhone(sendTo),
+    message: `OTP sent by SMS to ${maskPhone(sendTo)}.`,
+  };
+}
+
+async function lookupAppUserByPhoneFallback(
+  admin: ReturnType<typeof createAdminClient>,
+  normalizedPhone: string,
+): Promise<
+  | { user: { id: string; email: string | null; phone: string }; error?: never }
+  | { user: null; error?: string }
+> {
+  const { data: rows, error } = await admin
+    .from("app_users")
+    .select("id, phone, whatsapp_number, status")
+    .eq("status", "active")
+    .or("phone.not.is.null,whatsapp_number.not.is.null")
+    .limit(500);
+
+  if (error) {
+    console.error("[requestPasswordResetOtp] fallback lookup", error);
+    return { user: null, error: "Unable to process reset request right now" };
+  }
+
+  for (const row of rows ?? []) {
+    const candidates = [row.phone, row.whatsapp_number];
+    for (const raw of candidates) {
+      if (!raw) continue;
+      if (toWhatsAppMsIsdn(raw) === normalizedPhone) {
+        return {
+          user: {
+            id: row.id,
+            email: null,
+            phone: toWhatsAppMsIsdn(raw),
+          },
+        };
+      }
+    }
+  }
+
+  return { user: null };
+}
+
+async function staffPhoneExistsFallback(
+  admin: ReturnType<typeof createAdminClient>,
+  normalizedPhone: string,
+): Promise<boolean> {
+  const { data: rows } = await admin
+    .from("staff_members")
+    .select("phone")
+    .eq("status", "active")
+    .not("phone", "is", null)
+    .limit(500);
+
+  for (const row of rows ?? []) {
+    if (row.phone && toWhatsAppMsIsdn(row.phone) === normalizedPhone) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export type PasswordResetVerifyResult =

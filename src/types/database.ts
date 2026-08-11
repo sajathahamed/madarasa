@@ -1027,6 +1027,18 @@ export type Database = {
         Args: { p_email: string };
         Returns: { id: string; email: string }[];
       };
+      normalize_phone_msisdn: {
+        Args: { p: string };
+        Returns: string | null;
+      };
+      lookup_app_user_by_phone: {
+        Args: { p_phone: string };
+        Returns: { id: string; phone: string; email: string }[];
+      };
+      staff_phone_exists: {
+        Args: { p_phone: string };
+        Returns: boolean;
+      };
     };
     Enums: {
       user_role: UserRole;

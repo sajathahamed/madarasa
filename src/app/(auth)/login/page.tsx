@@ -31,14 +31,14 @@ const arabic = Amiri({
   variable: "--font-arabic",
 });
 
-type AuthView = "login" | "forgot-email" | "forgot-otp" | "forgot-password";
+type AuthView = "login" | "forgot-phone" | "forgot-otp" | "forgot-password";
 
 export default function LoginPage() {
   const router = useRouter();
   const [view, setView] = useState<AuthView>("login");
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
-  const [resetEmail, setResetEmail] = useState("");
+  const [resetPhone, setResetPhone] = useState("");
   const [resetId, setResetId] = useState<string | null>(null);
   const [maskedPhone, setMaskedPhone] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -57,7 +57,7 @@ export default function LoginPage() {
 
   const goForgot = () => {
     resetForgotState();
-    setView("forgot-email");
+    setView("forgot-phone");
   };
 
   return (
@@ -159,7 +159,7 @@ export default function LoginPage() {
         >
           {view === "login"
             ? "Sign in"
-            : view === "forgot-email"
+            : view === "forgot-phone"
               ? "Forgot password"
               : view === "forgot-otp"
                 ? "Verify OTP"
@@ -168,8 +168,8 @@ export default function LoginPage() {
         <p className="mt-1 text-sm text-[#5a6f65]">
           {view === "login"
             ? "Welcome back — enter your staff credentials to continue."
-            : view === "forgot-email"
-              ? "Enter your account email. We will SMS a one-time code to the phone on your profile."
+            : view === "forgot-phone"
+              ? "Enter the phone number on your login profile. We will SMS a one-time code if it matches an account."
               : view === "forgot-otp"
                 ? maskedPhone
                   ? `Enter the 6-digit code sent to ${maskedPhone}.`
@@ -252,24 +252,20 @@ export default function LoginPage() {
           </form>
         ) : null}
 
-        {view === "forgot-email" ? (
+        {view === "forgot-phone" ? (
           <form
             className="mt-8 space-y-4"
             onSubmit={(e) => {
               e.preventDefault();
               const formData = new FormData(e.currentTarget);
-              const email = String(formData.get("email") ?? "").trim();
+              const phone = String(formData.get("phone") ?? "").trim();
               setError(null);
               setInfo(null);
-              setResetEmail(email);
+              setResetPhone(phone);
               startTransition(async () => {
-                const result = await requestPasswordResetOtpAction({ email });
+                const result = await requestPasswordResetOtpAction({ phone });
                 if ("error" in result) {
                   setError(result.error);
-                  return;
-                }
-                if (result.noPhone) {
-                  setError(result.message);
                   return;
                 }
                 if (result.resetId) {
@@ -279,20 +275,21 @@ export default function LoginPage() {
                   setView("forgot-otp");
                   return;
                 }
-                // Account may not exist — show generic message, stay on step
-                setInfo(result.message || "Check your phone if an account exists.");
+                setError(result.message || "No account found for that phone number.");
               });
             }}
           >
             <div className="space-y-2">
-              <Label htmlFor="reset-email">Email</Label>
+              <Label htmlFor="reset-phone">Phone number</Label>
               <Input
-                id="reset-email"
-                name="email"
-                type="email"
+                id="reset-phone"
+                name="phone"
+                type="tel"
+                inputMode="tel"
                 required
-                autoComplete="email"
-                defaultValue={resetEmail}
+                autoComplete="tel"
+                placeholder="07XXXXXXXX"
+                defaultValue={resetPhone}
                 className="h-12 rounded-xl border-[#0b3d2e]/15 bg-white"
               />
             </div>
@@ -384,11 +381,11 @@ export default function LoginPage() {
               onClick={() => {
                 setError(null);
                 setInfo(null);
-                setView("forgot-email");
+                setView("forgot-phone");
               }}
               disabled={pending}
             >
-              Resend / use a different email
+              Resend / use a different phone
             </button>
           </form>
         ) : null}
