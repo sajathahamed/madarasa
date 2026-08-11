@@ -246,9 +246,14 @@ export function StudentProfileClient({
           </CardContent>
         </Card>
       ) : (
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-[#5a6f65]">Status:</span>
-          <StatusBadge value={student.status} />
+        <div className="space-y-2 rounded-xl border border-[#0b3d2e]/10 bg-white/60 px-4 py-3 text-sm">
+          <div className="flex items-center gap-2">
+            <span className="text-[#5a6f65]">Status:</span>
+            <StatusBadge value={student.status} />
+          </div>
+          <p className="text-xs text-[#5a6f65]">
+            Only Admin can edit profiles, mark left, or change fee plans.
+          </p>
         </div>
       )}
 

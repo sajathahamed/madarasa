@@ -191,9 +191,9 @@ export function AdminOpsClient({
         <CardHeader>
           <CardTitle>Admin delete dashboard</CardTitle>
           <CardDescription>
-            Principal / vendor admin can permanently remove mistaken records.
-            Approved payments and donations reverse ledger and fee balances.
-            Students are marked Left (soft delete).
+            Admin only. Permanently remove mistaken records. Approved payments
+            and donations reverse ledger and fee balances. Students are marked
+            Left (soft delete).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

@@ -12,8 +12,15 @@ export default async function FeesPage() {
   const monthStart = new Date(year, month - 1, 1).toISOString();
   const nextMonthStart = new Date(year, month, 1).toISOString();
   const todayStart = new Date(year, month - 1, now.getDate()).toISOString();
-  const tomorrowStart = new Date(year, month - 1, now.getDate() + 1).toISOString();
-  const monthLabel = now.toLocaleString("en", { month: "short", year: "numeric" });
+  const tomorrowStart = new Date(
+    year,
+    month - 1,
+    now.getDate() + 1,
+  ).toISOString();
+  const monthLabel = now.toLocaleString("en", {
+    month: "short",
+    year: "numeric",
+  });
 
   let studentsQ = supabase
     .from("students")
@@ -29,26 +36,27 @@ export default async function FeesPage() {
     .neq("status", "paid")
     .order("due_year", { ascending: false })
     .limit(500);
-  let monthPaymentsQ = supabase
+  let recentPaymentsQ = supabase
     .from("payments")
-    .select("id, amount, status, created_at")
-    .gte("created_at", monthStart)
-    .lt("created_at", nextMonthStart)
-    .limit(1000);
+    .select(
+      "id, student_id, amount, status, method, created_at, recorded_by, bank_reference",
+    )
+    .order("created_at", { ascending: false })
+    .limit(300);
 
   if (profile.vendor_id) {
     studentsQ = studentsQ.eq("vendor_id", profile.vendor_id);
     duesQ = duesQ.eq("vendor_id", profile.vendor_id);
-    monthPaymentsQ = monthPaymentsQ.eq("vendor_id", profile.vendor_id);
+    recentPaymentsQ = recentPaymentsQ.eq("vendor_id", profile.vendor_id);
   }
   if (profile.branch_id) {
     studentsQ = studentsQ.eq("branch_id", profile.branch_id);
     duesQ = duesQ.eq("branch_id", profile.branch_id);
-    monthPaymentsQ = monthPaymentsQ.eq("branch_id", profile.branch_id);
+    recentPaymentsQ = recentPaymentsQ.eq("branch_id", profile.branch_id);
   }
 
-  const [{ data: students }, { data: dues }, { data: monthPayments }] =
-    await Promise.all([studentsQ, duesQ, monthPaymentsQ]);
+  const [{ data: students }, { data: dues }, { data: recentPayments }] =
+    await Promise.all([studentsQ, duesQ, recentPaymentsQ]);
 
   const nameById = new Map((students ?? []).map((s) => [s.id, s.full_name]));
   const admissionById = new Map(
@@ -57,11 +65,15 @@ export default async function FeesPage() {
   const phoneById = new Map(
     (students ?? []).map((s) => [s.id, s.guardian_phone]),
   );
+
+  const paymentStudentIds = [
+    ...new Set((recentPayments ?? []).map((p) => p.student_id)),
+  ];
   const missingIds = [
     ...new Set(
-      (dues ?? [])
-        .map((d) => d.student_id)
-        .filter((id) => !nameById.has(id)),
+      [...(dues ?? []).map((d) => d.student_id), ...paymentStudentIds].filter(
+        (id) => !nameById.has(id),
+      ),
     ),
   ];
   if (missingIds.length > 0) {
@@ -76,15 +88,34 @@ export default async function FeesPage() {
     }
   }
 
+  const recorderIds = [
+    ...new Set(
+      (recentPayments ?? []).map((p) => p.recorded_by).filter(Boolean),
+    ),
+  ] as string[];
+  const recorderName = new Map<string, string>();
+  if (recorderIds.length > 0) {
+    const { data: recorders } = await supabase
+      .from("app_users")
+      .select("id, full_name")
+      .in("id", recorderIds);
+    for (const u of recorders ?? []) {
+      recorderName.set(u.id, u.full_name);
+    }
+  }
+
   const openDues = dues ?? [];
   const outstandingTotal = openDues.reduce(
     (sum, d) => sum + Math.max(0, Number(d.total_due) - Number(d.amount_paid)),
     0,
   );
 
-  const payments = monthPayments ?? [];
-  const monthApproved = payments.filter((p) => p.status === "approved");
-  const monthPending = payments.filter(
+  const payments = recentPayments ?? [];
+  const monthPayments = payments.filter(
+    (p) => p.created_at >= monthStart && p.created_at < nextMonthStart,
+  );
+  const monthApproved = monthPayments.filter((p) => p.status === "approved");
+  const monthPending = monthPayments.filter(
     (p) =>
       p.status === "pending_accountant" || p.status === "pending_principal",
   );
@@ -92,9 +123,30 @@ export default async function FeesPage() {
     (p) => p.created_at >= todayStart && p.created_at < tomorrowStart,
   );
 
-  const canGenerate = ["super_admin", "vendor_admin", "accountant", "principal"].includes(
-    profile.role,
-  );
+  const paymentRows = payments.map((p) => {
+    const note = p.bank_reference?.startsWith("Excel paid by:")
+      ? p.bank_reference
+      : null;
+    return {
+      id: p.id,
+      student_id: p.student_id,
+      amount: Number(p.amount),
+      status: p.status,
+      method: p.method,
+      created_at: p.created_at,
+      recorded_by_name: recorderName.get(p.recorded_by) ?? null,
+      paid_by_note: note,
+      student_name: nameById.get(p.student_id),
+      admission_no: admissionById.get(p.student_id),
+    };
+  });
+
+  const canGenerate = [
+    "super_admin",
+    "vendor_admin",
+    "accountant",
+    "principal",
+  ].includes(profile.role);
   const canRemind = [
     "super_admin",
     "vendor_admin",
@@ -107,7 +159,7 @@ export default async function FeesPage() {
     <OpsShell
       profile={profile}
       title="Fees"
-      subtitle="Record payments, search pending dues, SMS or WhatsApp remind"
+      subtitle="Record payments, see who paid, search pending dues"
     >
       <FeesOfficeClient
         students={students ?? []}
@@ -125,6 +177,7 @@ export default async function FeesPage() {
           admission_no: admissionById.get(d.student_id),
           guardian_phone: phoneById.get(d.student_id),
         }))}
+        payments={paymentRows}
         canGenerate={canGenerate}
         canRemind={canRemind}
         canRecord={canEnterData(profile.role)}

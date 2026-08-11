@@ -11,6 +11,7 @@ import {
   sendFeeReminderAction,
 } from "@/actions/students";
 import { RecordPaymentForm } from "@/components/operations/record-payment-form";
+import type { PaymentHistoryRow } from "@/components/operations/record-payment-form";
 import { StudentSearchInput } from "@/components/students/student-search-input";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,7 +21,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatMoney, formatPendingMonths } from "@/lib/format";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { formatDate, formatMoney, formatPendingMonths } from "@/lib/format";
 import { openWhatsAppLinks } from "@/lib/open-whatsapp";
 import { matchesStudentQuery } from "@/lib/student-search";
 
@@ -61,6 +63,7 @@ type ReminderChannel = "sms" | "whatsapp";
 export function FeesOfficeClient({
   students,
   dues,
+  payments = [],
   canGenerate,
   canRemind,
   canRecord,
@@ -68,6 +71,7 @@ export function FeesOfficeClient({
 }: {
   students: Student[];
   dues: Due[];
+  payments?: PaymentHistoryRow[];
   canGenerate: boolean;
   canRemind: boolean;
   canRecord: boolean;
@@ -308,7 +312,9 @@ export function FeesOfficeClient({
                     amount_paid: d.amount_paid,
                     due_month: d.due_month,
                     due_year: d.due_year,
+                    status: d.status,
                   }))}
+                payments={payments}
                 onSuccess={(msg) => {
                   showResult(msg, true);
                   router.refresh();
@@ -430,6 +436,57 @@ export function FeesOfficeClient({
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Who paid (recent payments)</CardTitle>
+          <CardDescription>
+            Visible to Admin and Data entry — student, amount, status, and who
+            recorded / paid.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {payments.length === 0 ? (
+            <p className="text-sm text-[#5a6f65]">No payments recorded yet.</p>
+          ) : (
+            <ul className="max-h-[420px] space-y-2 overflow-y-auto text-sm">
+              {payments.slice(0, 80).map((p) => (
+                <li
+                  key={p.id}
+                  className="flex flex-col gap-1 rounded-lg border border-[#0b3d2e]/10 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <Link
+                      href={`/branch/students/${p.student_id}`}
+                      className="font-medium text-[#0b3d2e] underline"
+                    >
+                      {p.student_name || p.student_id.slice(0, 8)}
+                    </Link>
+                    {p.admission_no ? (
+                      <span className="text-xs text-[#5a6f65]">
+                        {" "}
+                        · {p.admission_no}
+                      </span>
+                    ) : null}
+                    <p className="text-[#5a6f65]">
+                      {formatMoney(p.amount)} · {p.method} ·{" "}
+                      {formatDate(p.created_at)}
+                    </p>
+                    <p className="text-xs text-[#5a6f65]">
+                      {p.paid_by_note
+                        ? p.paid_by_note
+                        : p.recorded_by_name
+                          ? `Recorded by ${p.recorded_by_name}`
+                          : "Recorder unknown"}
+                    </p>
+                  </div>
+                  <StatusBadge value={p.status} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

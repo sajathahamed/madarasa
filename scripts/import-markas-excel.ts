@@ -3,13 +3,13 @@
  * "Monthly Fee mangent EDIT.xlsx".
  *
  * Amount source: column "Total pending" (already includes August).
- * pendingMonths = totalPending / 12000 (display; money stays exact).
- * fee_dues: total_due = totalPending, month_amount = 12000,
- *           carried_forward = max(0, totalPending - 12000).
+ * Payments: column "August payment" (amount paid) + optional "Paid by".
  *
  * Usage:
  *   npx tsx scripts/import-markas-excel.ts --dry-run
  *   npx tsx scripts/import-markas-excel.ts --wipe
+ *   npx tsx scripts/import-markas-excel.ts --payments-only
+ *     (import August payment rows into existing students; no wipe)
  */
 import { existsSync } from "fs";
 import { join } from "path";
@@ -44,6 +44,10 @@ type ParsedRow = {
   pendingMonths: number;
   /** Optional Excel "Pending Months" col for cross-check only. */
   excelPendingMonths: number | null;
+  /** Excel "August payment" — amount already paid. */
+  augustPayment: number;
+  /** Who paid (Excel "Paid by" if present, else student name). */
+  paidBy: string;
   status: "active" | "left";
   remappedFrom?: string;
 };
@@ -106,14 +110,54 @@ function loadExcel(path: string): ParsedRow[] {
     defval: null,
   });
 
+  const header = (rows[0] ?? []).map((h) =>
+    String(h ?? "")
+      .trim()
+      .toLowerCase(),
+  );
+  const findCol = (...needles: string[]) => {
+    for (let i = 0; i < header.length; i++) {
+      const h = header[i] ?? "";
+      if (needles.some((n) => h.includes(n))) return i;
+    }
+    return -1;
+  };
+
+  // Defaults match EDIT.xlsx layout; override if headers rename.
+  const colIndex = findCol("index") >= 0 ? findCol("index") : 1;
+  const colName = findCol("name") >= 0 ? findCol("name") : 2;
+  const colGrade = findCol("grade") >= 0 ? findCol("grade") : 3;
+  const colAddr = findCol("address") >= 0 || findCol("d") === 4 ? (findCol("address") >= 0 ? findCol("address") : 4) : 4;
+  const colPhone = findCol("p.no", "phone", "mobile") >= 0 ? findCol("p.no", "phone", "mobile") : 5;
+  const colPendingMonths = findCol("pending month") >= 0 ? findCol("pending month") : 6;
+  const colBal3007 = findCol("30.07", "balance on") >= 0 ? findCol("30.07", "balance on") : 7;
+  const colAugust = findCol("augest", "august") >= 0 && findCol("augest payment", "august payment") < 0
+    ? findCol("augest", "august")
+    : 8;
+  const colTotal = findCol("total pending") >= 0 ? findCol("total pending") : 9;
+  const colAugPay = findCol("augest payment", "august payment", "payment") >= 0
+    ? findCol("augest payment", "august payment", "payment")
+    : 10;
+  const colBalance = findCol("balance") >= 0 && findCol("balance on") !== findCol("balance")
+    ? (() => {
+        // Prefer last "Balance" that is not "BALANCE ON"
+        for (let i = header.length - 1; i >= 0; i--) {
+          const h = header[i] ?? "";
+          if (h.includes("balance") && !h.includes("30.07") && !h.includes("on")) return i;
+        }
+        return 11;
+      })()
+    : 11;
+  const colPaidBy = findCol("paid by", "payer", "who paid", "received by");
+
   const seen = new Map<string, number>();
   const out: ParsedRow[] = [];
 
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
     if (!row) continue;
-    const indexRaw = row[1];
-    const nameRaw = row[2];
+    const indexRaw = row[colIndex];
+    const nameRaw = row[colName];
     if (indexRaw == null && (nameRaw == null || String(nameRaw).trim() === "")) {
       continue;
     }
@@ -134,25 +178,33 @@ function loadExcel(path: string): ParsedRow[] {
     const remapped = count > 1;
     const admissionNo = remapped ? `${excelIndex}-${count}` : excelIndex;
 
-    // New sheet columns:
-    // 6 Pending Months, 7 BALANCE ON 30.07, 8 August, 9 Total pending, 10 Aug payment, 11 Balance
     const left =
-      isLeftMarker(row[6]) ||
-      isLeftMarker(row[7]) ||
-      isLeftMarker(row[9]) ||
-      isLeftMarker(row[11]);
+      isLeftMarker(row[colPendingMonths]) ||
+      isLeftMarker(row[colBal3007]) ||
+      isLeftMarker(row[colTotal]) ||
+      isLeftMarker(row[colBalance]);
 
     const totalPendingRaw =
-      parseMoney(row[9]) ??
-      parseMoney(row[11]) ??
-      (parseMoney(row[7]) != null && parseMoney(row[8]) != null
-        ? (parseMoney(row[7]) as number) + (parseMoney(row[8]) as number)
+      parseMoney(row[colTotal]) ??
+      parseMoney(row[colBalance]) ??
+      (parseMoney(row[colBal3007]) != null && parseMoney(row[colAugust]) != null
+        ? (parseMoney(row[colBal3007]) as number) +
+          (parseMoney(row[colAugust]) as number)
         : null) ??
       0;
     const totalPending = left ? 0 : Math.max(0, totalPendingRaw);
-    const excelPendingMonths = left ? null : parseMoney(row[6]);
+    const excelPendingMonths = left ? null : parseMoney(row[colPendingMonths]);
+    const augustPayment = left
+      ? 0
+      : Math.max(0, parseMoney(row[colAugPay]) ?? 0);
 
-    const gradeRaw = (row[3] ?? "") as string | number;
+    let paidBy = fullName;
+    if (colPaidBy >= 0 && row[colPaidBy] != null && String(row[colPaidBy]).trim()) {
+      paidBy = String(row[colPaidBy]).trim();
+    }
+
+    const gradeRaw = (row[colGrade] ?? "") as string | number;
+    const addrRaw = row[colAddr];
 
     out.push({
       excelIndex,
@@ -161,17 +213,91 @@ function loadExcel(path: string): ParsedRow[] {
       gradeRaw,
       className: classNameFromGrade(gradeRaw),
       address:
-        row[4] != null && String(row[4]).trim() ? String(row[4]).trim() : null,
-      phone: parsePhone(row[5]),
+        addrRaw != null && String(addrRaw).trim() ? String(addrRaw).trim() : null,
+      phone: parsePhone(row[colPhone]),
       totalPending,
       pendingMonths: monthsFromPending(totalPending),
       excelPendingMonths,
+      augustPayment,
+      paidBy,
       status: left ? "left" : "active",
       remappedFrom: remapped ? excelIndex : undefined,
     });
   }
 
   return out;
+}
+
+async function resolveRecorderId(
+  client: pg.Client,
+  vendorId: string,
+): Promise<string> {
+  const admin = await client.query<{ id: string }>(
+    `select id from public.app_users
+     where vendor_id = $1 and role = 'vendor_admin' and status = 'active'
+     order by created_at asc
+     limit 1`,
+    [vendorId],
+  );
+  if (admin.rows[0]) return admin.rows[0].id;
+  const any = await client.query<{ id: string }>(
+    `select id from public.app_users
+     where vendor_id = $1 and status = 'active'
+     limit 1`,
+    [vendorId],
+  );
+  if (!any.rows[0]) {
+    throw new Error("No app_users on vendor to set as recorded_by for payments");
+  }
+  return any.rows[0].id;
+}
+
+/** Insert approved payment (triggers ledger via status update) and note payer. */
+async function importPaymentForStudent(
+  client: pg.Client,
+  opts: {
+    vendorId: string;
+    branchId: string;
+    studentId: string;
+    feeDueId: string | null;
+    amount: number;
+    recordedBy: string;
+    paidBy: string;
+  },
+) {
+  if (opts.amount <= 0) return false;
+
+  const inserted = await client.query<{ id: string }>(
+    `insert into public.payments (
+       vendor_id, branch_id, student_id, fee_due_id,
+       amount, method, bank_reference, recorded_by, status
+     ) values ($1,$2,$3,$4,$5,'cash',$6,$7,'pending_accountant')
+     returning id`,
+    [
+      opts.vendorId,
+      opts.branchId,
+      opts.studentId,
+      opts.feeDueId,
+      opts.amount,
+      `Excel paid by: ${opts.paidBy}`,
+      opts.recordedBy,
+    ],
+  );
+  const paymentId = inserted.rows[0].id;
+
+  await client.query(
+    `update public.payments set
+       status = 'approved',
+       accountant_id = $2,
+       accountant_action_at = now(),
+       principal_id = $2,
+       principal_action_at = now(),
+       accountant_remarks = $3,
+       principal_remarks = $3
+     where id = $1`,
+    [paymentId, opts.recordedBy, `Imported from Excel — paid by ${opts.paidBy}`],
+  );
+  return true;
 }
 
 async function wipeVendorBranch(
@@ -267,7 +393,9 @@ async function wipeVendorBranch(
 
 async function main() {
   const dryRun = process.argv.includes("--dry-run");
-  const wipe = process.argv.includes("--wipe") || !dryRun;
+  const paymentsOnly = process.argv.includes("--payments-only");
+  const wipe =
+    !paymentsOnly && (process.argv.includes("--wipe") || !dryRun);
   const url = process.env.DATABASE_URL;
   if (!url) {
     console.error("DATABASE_URL missing in .env.local");
@@ -281,12 +409,17 @@ async function main() {
   const remaps = parsed.filter((r) => r.remappedFrom);
   const active = parsed.filter((r) => r.status === "active");
   const left = parsed.filter((r) => r.status === "left");
+  const withPay = parsed.filter((r) => r.augustPayment > 0);
   const sumPending = active.reduce((s, r) => s + r.totalPending, 0);
+  const sumPayments = withPay.reduce((s, r) => s + r.augustPayment, 0);
 
   console.log(
     `Loaded ${parsed.length} rows (${active.length} active, ${left.length} left)`,
   );
   console.log(`Active total pending sum: ${sumPending}`);
+  console.log(
+    `August payment rows: ${withPay.length} · sum paid: ${sumPayments}`,
+  );
   if (remaps.length) {
     console.log(
       "Duplicate Index remaps:",
@@ -300,25 +433,8 @@ async function main() {
   if (sample) {
     const carried = Math.max(0, sample.totalPending - MONTHLY_AMOUNT);
     console.log(
-      `Sample 595 ${sample.fullName}: totalPending=${sample.totalPending} → pendingMonths=${sample.pendingMonths} (excel col=${sample.excelPendingMonths ?? "—"}) → carried=${carried} + month=${MONTHLY_AMOUNT}`,
+      `Sample 595 ${sample.fullName}: totalPending=${sample.totalPending} → pendingMonths=${sample.pendingMonths} · augustPayment=${sample.augustPayment} · paidBy=${sample.paidBy} → carried=${carried} + month=${MONTHLY_AMOUNT}`,
     );
-  }
-
-  // Cross-check: Excel "Pending Months" vs derived (log mismatches only)
-  const mismatches = active.filter(
-    (r) =>
-      r.excelPendingMonths != null &&
-      Math.abs(r.excelPendingMonths - r.pendingMonths) > 0.05,
-  );
-  if (mismatches.length) {
-    console.log(
-      `Pending-months mismatches (excel vs total/12000): ${mismatches.length} (showing up to 5)`,
-    );
-    for (const r of mismatches.slice(0, 5)) {
-      console.log(
-        `  ${r.admissionNo} ${r.fullName}: excel=${r.excelPendingMonths} derived=${r.pendingMonths} total=${r.totalPending}`,
-      );
-    }
   }
 
   if (dryRun) {
@@ -327,13 +443,28 @@ async function main() {
       byClass.set(r.className, (byClass.get(r.className) ?? 0) + 1);
     }
     console.log("Active by class:", Object.fromEntries(byClass));
-    console.log("DRY RUN — no DB writes. Pass without --dry-run to wipe+import.");
+    if (withPay.length) {
+      console.log(
+        "Sample payments:",
+        withPay
+          .slice(0, 5)
+          .map(
+            (r) =>
+              `${r.admissionNo} ${r.fullName}: ${r.augustPayment} by ${r.paidBy}`,
+          )
+          .join("; "),
+      );
+    } else {
+      console.log(
+        "No August payment amounts in Excel (column empty). Fill “August payment” (+ optional Paid by) then re-run.",
+      );
+    }
+    console.log(
+      paymentsOnly
+        ? "DRY RUN — payments-only (no DB writes)."
+        : "DRY RUN — no DB writes. Pass without --dry-run to wipe+import.",
+    );
     return;
-  }
-
-  if (!wipe) {
-    console.error("Refusing live import without wipe. Use --wipe (default for live).");
-    process.exit(1);
   }
 
   const client = new pg.Client({
@@ -363,6 +494,55 @@ async function main() {
       `Vendor ${vendorRes.rows[0].name} / branch ${branchRes.rows[0].name}`,
     );
 
+    const recorderId = await resolveRecorderId(client, vendorId);
+
+    if (paymentsOnly) {
+      let paymentsInserted = 0;
+      let skipped = 0;
+      for (const row of withPay) {
+        const st = await client.query<{ id: string }>(
+          `select id from public.students
+           where vendor_id = $1 and branch_id = $2 and admission_no = $3
+           limit 1`,
+          [vendorId, branchId, row.admissionNo],
+        );
+        if (!st.rows[0]) {
+          console.warn(`No student for admission ${row.admissionNo}`);
+          skipped++;
+          continue;
+        }
+        const studentId = st.rows[0].id;
+        const due = await client.query<{ id: string }>(
+          `select id from public.fee_dues
+           where student_id = $1 and due_month = $2 and due_year = $3
+           limit 1`,
+          [studentId, DUE_MONTH, DUE_YEAR],
+        );
+        const ok = await importPaymentForStudent(client, {
+          vendorId,
+          branchId,
+          studentId,
+          feeDueId: due.rows[0]?.id ?? null,
+          amount: row.augustPayment,
+          recordedBy: recorderId,
+          paidBy: row.paidBy,
+        });
+        if (ok) paymentsInserted++;
+      }
+      await client.query("commit");
+      console.log(
+        JSON.stringify({ mode: "payments-only", paymentsInserted, skipped }, null, 2),
+      );
+      return;
+    }
+
+    if (!wipe) {
+      console.error(
+        "Refusing live import without wipe. Use --wipe or --payments-only.",
+      );
+      process.exit(1);
+    }
+
     await wipeVendorBranch(client, vendorId, branchId);
 
     const classIds = new Map<string, string>();
@@ -382,6 +562,7 @@ async function main() {
     let plansInserted = 0;
     let duesInserted = 0;
     let enrollmentsInserted = 0;
+    let paymentsInserted = 0;
 
     for (const row of parsed) {
       const inserted = await client.query<{ id: string }>(
@@ -422,14 +603,14 @@ async function main() {
         const totalDue = row.totalPending;
         const monthAmount = MONTHLY_AMOUNT;
         const carried = Math.max(0, totalDue - monthAmount);
-        const dueStatus =
-          totalDue <= 0 ? "paid" : "unpaid";
+        const dueStatus = totalDue <= 0 ? "paid" : "unpaid";
 
-        await client.query(
+        const dueIns = await client.query<{ id: string }>(
           `insert into public.fee_dues (
              student_id, vendor_id, branch_id, due_month, due_year,
              month_amount, carried_forward, total_due, amount_paid, status
-           ) values ($1,$2,$3,$4,$5,$6,$7,$8,0,$9)`,
+           ) values ($1,$2,$3,$4,$5,$6,$7,$8,0,$9)
+           returning id`,
           [
             studentId,
             vendorId,
@@ -443,6 +624,20 @@ async function main() {
           ],
         );
         duesInserted++;
+        const feeDueId = dueIns.rows[0].id;
+
+        if (row.augustPayment > 0) {
+          const ok = await importPaymentForStudent(client, {
+            vendorId,
+            branchId,
+            studentId,
+            feeDueId,
+            amount: row.augustPayment,
+            recordedBy: recorderId,
+            paidBy: row.paidBy,
+          });
+          if (ok) paymentsInserted++;
+        }
 
         const classId = classIds.get(row.className);
         if (classId) {
@@ -466,6 +661,7 @@ async function main() {
           plansInserted,
           duesInserted,
           enrollmentsInserted,
+          paymentsInserted,
           classes: neededClasses.length,
           activeTotalPending: sumPending,
         },

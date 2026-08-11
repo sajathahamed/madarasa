@@ -34,23 +34,22 @@ export function canEnterData(role: string) {
   return ["super_admin", "vendor_admin", "data_entry"].includes(role);
 }
 
-/** Profile + fee plan edits (ops staff including legacy accountant/principal). */
+/** True admin for this vendor (Akram) — only these roles may edit / manage. */
+export function isVendorAdmin(role: string) {
+  return role === "vendor_admin" || role === "super_admin";
+}
+
+/** Edit student profile, fee plan, mark left — Admin only. */
 export function canEditStudent(role: string) {
-  return [
-    "super_admin",
-    "vendor_admin",
-    "data_entry",
-    "accountant",
-    "principal",
-  ].includes(role);
+  return isVendorAdmin(role);
 }
 
-/** Separate admin dashboard: delete / void operational records. */
+/** Admin delete dashboard — Admin only. */
 export function canManageAdminOps(role: string) {
-  return ["super_admin", "vendor_admin", "principal"].includes(role);
+  return isVendorAdmin(role);
 }
 
-/** Approve / reject payments & donations (full admin oversight). */
+/** Approve / reject payments & donations (Admin; legacy money roles kept). */
 export function canApproveMoney(role: string) {
   return ["super_admin", "vendor_admin", "accountant", "principal"].includes(
     role,
@@ -67,15 +66,14 @@ export function canMarkAttendance(role: string) {
   ].includes(role);
 }
 
+/** Create/edit classes & enrollments — Admin only. */
 export function canManageClasses(role: string) {
-  return ["super_admin", "vendor_admin", "principal", "data_entry"].includes(
-    role,
-  );
+  return isVendorAdmin(role);
 }
 
-/** Library (kutub) catalog + loans — same ops roles as classes. */
+/** Library catalog + loans manage — Admin only. Data entry can view page if linked. */
 export function canManageLibrary(role: string) {
-  return canManageClasses(role);
+  return isVendorAdmin(role);
 }
 
 export function canLogProgress(role: string) {

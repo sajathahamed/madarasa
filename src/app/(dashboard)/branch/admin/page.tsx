@@ -129,7 +129,7 @@ export default async function BranchAdminPage() {
     <OpsShell
       profile={profile}
       title="Admin"
-      subtitle="Delete mistaken payments, dues, students, and other records"
+      subtitle="Admin only — edit, delete, and manage records (Akram)"
     >
       <AdminOpsClient
         payments={(payments ?? []).map((p) => ({
