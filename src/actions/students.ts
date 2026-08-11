@@ -75,11 +75,60 @@ export async function updateStudentAction(
       });
 
     if (healthError) return { error: healthError.message };
+
+    if (studentFields.status === "left") {
+      await auth.supabase
+        .from("class_enrollments")
+        .update({
+          is_active: false,
+          left_at: new Date().toISOString().slice(0, 10),
+        })
+        .eq("student_id", id)
+        .eq("is_active", true);
+    }
+
     return { ok: true as const };
   } catch (err) {
     console.error("[updateStudentAction]", err);
     return {
       error: err instanceof Error ? err.message : "Failed to update student",
+    };
+  }
+}
+
+/** Mark student as left / reactivate / graduated from madarasa. */
+export async function setStudentStatusAction(opts: {
+  studentId: string;
+  status: "active" | "left" | "graduated";
+}) {
+  try {
+    const auth = await requireProfile();
+    if ("error" in auth) return { error: auth.error };
+    if (!canEditStudent(auth.profile.role)) return { error: "Forbidden" };
+
+    const { error } = await auth.supabase
+      .from("students")
+      .update({ status: opts.status })
+      .eq("id", opts.studentId);
+
+    if (error) return { error: error.message };
+
+    if (opts.status === "left" || opts.status === "graduated") {
+      await auth.supabase
+        .from("class_enrollments")
+        .update({
+          is_active: false,
+          left_at: new Date().toISOString().slice(0, 10),
+        })
+        .eq("student_id", opts.studentId)
+        .eq("is_active", true);
+    }
+
+    return { ok: true as const };
+  } catch (err) {
+    console.error("[setStudentStatusAction]", err);
+    return {
+      error: err instanceof Error ? err.message : "Failed to update status",
     };
   }
 }

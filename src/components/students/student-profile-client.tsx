@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { enrollStudentAction } from "@/actions/attendance";
 import {
   changeFeePlanAction,
+  setStudentStatusAction,
   updateStudentAction,
 } from "@/actions/students";
 import { createParentLinkAction } from "@/actions/parent";
@@ -115,6 +116,141 @@ export function StudentProfileClient({
   return (
     <div className="space-y-6">
       {message ? <p className="text-sm text-[#0b3d2e]">{message}</p> : null}
+
+      {student.status === "left" ? (
+        <div
+          role="status"
+          className="rounded-xl border border-rose-300 bg-rose-100 px-4 py-3 text-sm text-rose-950"
+        >
+          <p className="font-medium">This student has left the madarasa.</p>
+          <p className="mt-1 text-rose-900/80">
+            Shown in rose on student lists. Reactivate below if they return.
+          </p>
+        </div>
+      ) : null}
+      {student.status === "graduated" ? (
+        <div
+          role="status"
+          className="rounded-xl border border-sky-300 bg-sky-50 px-4 py-3 text-sm text-sky-950"
+        >
+          <p className="font-medium">This student has graduated.</p>
+        </div>
+      ) : null}
+
+      {canEdit ? (
+        <Card
+          className={
+            student.status === "left"
+              ? "border-rose-300 bg-rose-50/40"
+              : undefined
+          }
+        >
+          <CardHeader>
+            <CardTitle>Madarasa status</CardTitle>
+            <CardDescription>
+              Mark students who leave. Left students stay in records with a
+              different colour.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            {student.status !== "left" ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="border-rose-400 text-rose-900"
+                pending={pending}
+                pendingLabel="Updating…"
+                onClick={() => {
+                  if (
+                    !window.confirm(
+                      `Mark ${student.full_name} as left the madarasa?`,
+                    )
+                  ) {
+                    return;
+                  }
+                  startTransition(async () => {
+                    const result = await setStudentStatusAction({
+                      studentId: student.id,
+                      status: "left",
+                    });
+                    setMessage(
+                      result.error
+                        ? result.error
+                        : "Student marked as left",
+                    );
+                    if (!result.error) router.refresh();
+                  });
+                }}
+              >
+                Mark as left
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                className="bg-[#0b3d2e]"
+                pending={pending}
+                pendingLabel="Updating…"
+                onClick={() => {
+                  startTransition(async () => {
+                    const result = await setStudentStatusAction({
+                      studentId: student.id,
+                      status: "active",
+                    });
+                    setMessage(
+                      result.error
+                        ? result.error
+                        : "Student reactivated",
+                    );
+                    if (!result.error) router.refresh();
+                  });
+                }}
+              >
+                Reactivate student
+              </Button>
+            )}
+            {student.status !== "graduated" ? (
+              <Button
+                type="button"
+                variant="outline"
+                pending={pending}
+                pendingLabel="Updating…"
+                onClick={() => {
+                  if (
+                    !window.confirm(
+                      `Mark ${student.full_name} as graduated?`,
+                    )
+                  ) {
+                    return;
+                  }
+                  startTransition(async () => {
+                    const result = await setStudentStatusAction({
+                      studentId: student.id,
+                      status: "graduated",
+                    });
+                    setMessage(
+                      result.error
+                        ? result.error
+                        : "Student marked as graduated",
+                    );
+                    if (!result.error) router.refresh();
+                  });
+                }}
+              >
+                Mark graduated
+              </Button>
+            ) : null}
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-[#5a6f65]">Current:</span>
+              <StatusBadge value={student.status} />
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="flex items-center gap-2 text-sm">
+          <span className="text-[#5a6f65]">Status:</span>
+          <StatusBadge value={student.status} />
+        </div>
+      )}
 
       <Card>
         <CardHeader>

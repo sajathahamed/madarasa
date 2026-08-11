@@ -44,7 +44,7 @@ export function VendorStudentsTable({
             Students
           </h2>
           <p className="text-sm text-[#5a6f65]">
-            Search by name or admission ID.
+            Search by name or admission ID. Left students show in rose.
           </p>
         </div>
         <StudentSearchInput value={q} onChange={setQ} />
@@ -86,9 +86,24 @@ export function VendorStudentsTable({
               </EmptyRow>
             ) : (
               filtered.map((s) => (
-                <tr key={s.id} className="border-t border-[#0b3d2e]/8">
+                <tr
+                  key={s.id}
+                  className={
+                    s.status === "left"
+                      ? "border-t border-rose-200 bg-rose-50/90"
+                      : s.status === "graduated"
+                        ? "border-t border-sky-100 bg-sky-50/50"
+                        : "border-t border-[#0b3d2e]/8"
+                  }
+                >
                   <td className="px-3 py-2">{s.admission_no}</td>
-                  <td className="px-3 py-2 font-medium">
+                  <td
+                    className={
+                      s.status === "left"
+                        ? "px-3 py-2 font-medium text-rose-900"
+                        : "px-3 py-2 font-medium"
+                    }
+                  >
                     <Link
                       href={`/branch/students/${s.id}`}
                       className="underline"

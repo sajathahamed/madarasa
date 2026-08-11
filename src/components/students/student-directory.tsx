@@ -47,7 +47,7 @@ export function StudentDirectory({ students }: { students: Row[] }) {
         >
           <option value="all">All statuses</option>
           <option value="active">Active</option>
-          <option value="left">Left</option>
+          <option value="left">Left (rose)</option>
           <option value="graduated">Graduated</option>
         </select>
         <select
@@ -61,6 +61,9 @@ export function StudentDirectory({ students }: { students: Row[] }) {
           <option value="unassigned">Unassigned</option>
         </select>
       </div>
+      <p className="text-xs text-[#5a6f65]">
+        Left students appear with a rose background so they are easy to spot.
+      </p>
 
       <div className="-mx-4 overflow-x-auto overscroll-x-contain px-4 sm:mx-0 sm:px-0">
         <div className="overflow-hidden rounded-xl border border-[#0b3d2e]/10 bg-white/70">
@@ -78,11 +81,24 @@ export function StudentDirectory({ students }: { students: Row[] }) {
             </thead>
             <tbody>
               {filtered.map((s) => (
-                <tr key={s.id} className="border-b border-[#0b3d2e]/5">
+                <tr
+                  key={s.id}
+                  className={
+                    s.status === "left"
+                      ? "border-b border-rose-200/80 bg-rose-50/90"
+                      : s.status === "graduated"
+                        ? "border-b border-sky-100 bg-sky-50/50"
+                        : "border-b border-[#0b3d2e]/5"
+                  }
+                >
                   <td className="px-3 py-3">
                     <Link
                       href={`/branch/students/${s.id}`}
-                      className="font-medium text-[#0b3d2e] underline"
+                      className={
+                        s.status === "left"
+                          ? "font-medium text-rose-900 underline"
+                          : "font-medium text-[#0b3d2e] underline"
+                      }
                     >
                       {s.full_name}
                     </Link>
