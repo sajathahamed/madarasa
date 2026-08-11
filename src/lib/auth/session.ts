@@ -39,9 +39,9 @@ export function isVendorAdmin(role: string) {
   return role === "vendor_admin" || role === "super_admin";
 }
 
-/** Edit student profile, fee plan, mark left — Admin only. */
+/** Edit student profile, fee plan, mark left — Admin and Data entry. */
 export function canEditStudent(role: string) {
-  return isVendorAdmin(role);
+  return canEnterData(role);
 }
 
 /** Admin delete dashboard — Admin only. */
