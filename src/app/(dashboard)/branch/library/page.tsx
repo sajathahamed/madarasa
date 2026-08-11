@@ -23,9 +23,17 @@ export default async function LibraryPage() {
     .eq("status", "active")
     .order("full_name")
     .limit(400);
+  let staffQ = supabase
+    .from("staff_members")
+    .select("id, full_name, staff_code, role_title, phone")
+    .eq("status", "active")
+    .order("full_name")
+    .limit(400);
   let loansQ = supabase
     .from("library_loans")
-    .select("id, book_id, student_id, borrowed_at, returned_at, notes")
+    .select(
+      "id, book_id, student_id, staff_id, borrowed_at, returned_at, notes",
+    )
     .order("borrowed_at", { ascending: false })
     .limit(200);
   let branchesQ = supabase
@@ -37,6 +45,7 @@ export default async function LibraryPage() {
     booksQ = booksQ.eq("vendor_id", profile.vendor_id);
     typesQ = typesQ.eq("vendor_id", profile.vendor_id);
     studentsQ = studentsQ.eq("vendor_id", profile.vendor_id);
+    staffQ = staffQ.eq("vendor_id", profile.vendor_id);
     loansQ = loansQ.eq("vendor_id", profile.vendor_id);
     branchesQ = branchesQ.eq("vendor_id", profile.vendor_id);
   }
@@ -44,6 +53,7 @@ export default async function LibraryPage() {
     booksQ = booksQ.eq("branch_id", profile.branch_id);
     typesQ = typesQ.eq("branch_id", profile.branch_id);
     studentsQ = studentsQ.eq("branch_id", profile.branch_id);
+    staffQ = staffQ.eq("branch_id", profile.branch_id);
     loansQ = loansQ.eq("branch_id", profile.branch_id);
   }
 
@@ -51,9 +61,17 @@ export default async function LibraryPage() {
     { data: books },
     { data: bookTypes },
     { data: students },
+    { data: staff },
     { data: loans },
     { data: branches },
-  ] = await Promise.all([booksQ, typesQ, studentsQ, loansQ, branchesQ]);
+  ] = await Promise.all([
+    booksQ,
+    typesQ,
+    studentsQ,
+    staffQ,
+    loansQ,
+    branchesQ,
+  ]);
 
   const typeById = new Map((bookTypes ?? []).map((t) => [t.id, t.name]));
   const activeOutByBook = new Map<string, number>();
@@ -66,16 +84,42 @@ export default async function LibraryPage() {
     }
   }
 
-  const studentIds = [...new Set((loans ?? []).map((l) => l.student_id))];
-  const { data: loanStudents } =
+  const studentIds = [
+    ...new Set(
+      (loans ?? []).map((l) => l.student_id).filter((id): id is string => !!id),
+    ),
+  ];
+  const staffIds = [
+    ...new Set(
+      (loans ?? []).map((l) => l.staff_id).filter((id): id is string => !!id),
+    ),
+  ];
+  const [{ data: loanStudents }, { data: loanStaff }] = await Promise.all([
     studentIds.length > 0
-      ? await supabase
+      ? supabase
           .from("students")
           .select("id, full_name, admission_no")
           .in("id", studentIds)
-      : { data: [] as { id: string; full_name: string; admission_no: string }[] };
+      : Promise.resolve({
+          data: [] as { id: string; full_name: string; admission_no: string }[],
+        }),
+    staffIds.length > 0
+      ? supabase
+          .from("staff_members")
+          .select("id, full_name, staff_code, role_title")
+          .in("id", staffIds)
+      : Promise.resolve({
+          data: [] as {
+            id: string;
+            full_name: string;
+            staff_code: string | null;
+            role_title: string | null;
+          }[],
+        }),
+  ]);
 
   const studentById = new Map((loanStudents ?? []).map((s) => [s.id, s]));
+  const staffById = new Map((loanStaff ?? []).map((s) => [s.id, s]));
   const bookById = new Map((books ?? []).map((b) => [b.id, b]));
 
   const missingBookIds = [
@@ -108,7 +152,8 @@ export default async function LibraryPage() {
 
   const mappedLoans = (loans ?? []).map((l) => {
     const book = bookById.get(l.book_id);
-    const st = studentById.get(l.student_id);
+    const st = l.student_id ? studentById.get(l.student_id) : null;
+    const staffMember = l.staff_id ? staffById.get(l.staff_id) : null;
     return {
       id: l.id,
       book_id: l.book_id,
@@ -117,8 +162,12 @@ export default async function LibraryPage() {
       book_author: book?.author ?? null,
       book_type_name: book?.type_id ? typeById.get(book.type_id) ?? null : null,
       student_id: l.student_id,
-      student_name: st?.full_name ?? "Unknown student",
-      admission_no: st?.admission_no ?? "—",
+      staff_id: l.staff_id,
+      borrower_kind: l.staff_id ? ("staff" as const) : ("student" as const),
+      borrower_name:
+        staffMember?.full_name ?? st?.full_name ?? "Unknown borrower",
+      borrower_code:
+        staffMember?.staff_code ?? st?.admission_no ?? "—",
       borrowed_at: l.borrowed_at,
       returned_at: l.returned_at,
       notes: l.notes,
@@ -149,6 +198,12 @@ export default async function LibraryPage() {
           notes: b.notes,
         }))}
         students={students ?? []}
+        staff={(staff ?? []).map((s) => ({
+          id: s.id,
+          full_name: s.full_name,
+          staff_code: s.staff_code,
+          role_title: s.role_title,
+        }))}
         activeLoans={mappedLoans.filter((l) => !l.returned_at)}
         returnedLoans={mappedLoans.filter((l) => !!l.returned_at)}
         canManage={canManageLibrary(profile.role)}

@@ -110,6 +110,7 @@ export function opsNav(profile: AppUser) {
       { href: "/branch", label: "Overview" },
       { href: "/branch/accountant", label: "Approvals desk" },
       { href: "/branch/students", label: "Students" },
+      { href: "/branch/staff", label: "Staff" },
       { href: "/branch/fees", label: "Fees" },
       { href: "/branch/approvals", label: "Approvals" },
       { href: "/branch/donations", label: "Donations" },
@@ -127,6 +128,7 @@ export function opsNav(profile: AppUser) {
     return [
       { href: "/branch", label: "Overview" },
       { href: "/branch/students", label: "Students" },
+      { href: "/branch/staff", label: "Staff" },
       { href: "/branch/fees", label: "Fees" },
       { href: "/branch/approvals", label: "My submissions" },
       { href: "/branch/donations", label: "Donations" },
@@ -157,6 +159,7 @@ export function opsNav(profile: AppUser) {
             ? [{ href: "/branch/accountant", label: "Approvals desk" }]
             : []),
           { href: "/branch/students", label: "Students" },
+          { href: "/branch/staff", label: "Staff" },
           { href: "/branch/fees", label: "Fees" },
           { href: "/branch/approvals", label: "Approvals" },
           { href: "/branch/donations", label: "Donations" },

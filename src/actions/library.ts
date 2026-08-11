@@ -159,7 +159,8 @@ export async function addLibraryBookAction(
 
 const borrowSchema = z.object({
   book_id: z.string().uuid(),
-  student_id: z.string().uuid(),
+  student_id: z.string().uuid().optional().nullable(),
+  staff_id: z.string().uuid().optional().nullable(),
   due_at: z.string().optional().nullable(),
   notes: z.string().optional(),
 });
@@ -177,6 +178,12 @@ export async function borrowLibraryBookAction(
       return { error: parsed.error.issues.map((i) => i.message).join("; ") };
     }
 
+    const studentId = parsed.data.student_id || null;
+    const staffId = parsed.data.staff_id || null;
+    if ((!studentId && !staffId) || (studentId && staffId)) {
+      return { error: "Choose either a student or a staff member" };
+    }
+
     const { data: book } = await auth.supabase
       .from("library_books")
       .select(
@@ -187,17 +194,32 @@ export async function borrowLibraryBookAction(
 
     if (!book || !book.is_active) return { error: "Book not found" };
 
-    const { data: student } = await auth.supabase
-      .from("students")
-      .select("id, vendor_id, branch_id, status")
-      .eq("id", parsed.data.student_id)
-      .maybeSingle();
+    if (studentId) {
+      const { data: student } = await auth.supabase
+        .from("students")
+        .select("id, vendor_id, branch_id, status")
+        .eq("id", studentId)
+        .maybeSingle();
 
-    if (!student || student.status !== "active") {
-      return { error: "Student not found" };
-    }
-    if (student.vendor_id !== book.vendor_id) {
-      return { error: "Student and book must be same vendor" };
+      if (!student || student.status !== "active") {
+        return { error: "Student not found" };
+      }
+      if (student.vendor_id !== book.vendor_id) {
+        return { error: "Student and book must be same vendor" };
+      }
+    } else if (staffId) {
+      const { data: staff } = await auth.supabase
+        .from("staff_members")
+        .select("id, vendor_id, branch_id, status, full_name")
+        .eq("id", staffId)
+        .maybeSingle();
+
+      if (!staff || staff.status !== "active") {
+        return { error: "Staff not found or not active" };
+      }
+      if (staff.vendor_id !== book.vendor_id) {
+        return { error: "Staff and book must be same vendor" };
+      }
     }
 
     const { count: outCount } = await auth.supabase
@@ -217,7 +239,8 @@ export async function borrowLibraryBookAction(
       vendor_id: book.vendor_id,
       branch_id: book.branch_id,
       book_id: book.id,
-      student_id: student.id,
+      student_id: studentId,
+      staff_id: staffId,
       due_at: parsed.data.due_at || null,
       notes: parsed.data.notes?.trim() || null,
       borrowed_by: auth.user.id,

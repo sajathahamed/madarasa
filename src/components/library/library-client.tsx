@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -39,6 +39,13 @@ type Book = {
 
 type Student = { id: string; full_name: string; admission_no: string };
 
+type Staff = {
+  id: string;
+  full_name: string;
+  staff_code: string | null;
+  role_title: string | null;
+};
+
 type Loan = {
   id: string;
   book_id: string;
@@ -46,9 +53,11 @@ type Loan = {
   book_qitab_id: string;
   book_author: string | null;
   book_type_name: string | null;
-  student_id: string;
-  student_name: string;
-  admission_no: string;
+  student_id: string | null;
+  staff_id: string | null;
+  borrower_kind: "student" | "staff";
+  borrower_name: string;
+  borrower_code: string;
   borrowed_at: string;
   returned_at: string | null;
   notes: string | null;
@@ -60,6 +69,7 @@ export function LibraryClient({
   books,
   bookTypes,
   students,
+  staff,
   activeLoans,
   returnedLoans,
   canManage,
@@ -69,6 +79,7 @@ export function LibraryClient({
   books: Book[];
   bookTypes: BookType[];
   students: Student[];
+  staff: Staff[];
   activeLoans: Loan[];
   returnedLoans: Loan[];
   canManage: boolean;
@@ -80,10 +91,27 @@ export function LibraryClient({
   const [bookQuery, setBookQuery] = useState("");
   const [tab, setTab] = useState<"active" | "history">("active");
   const [borrowBookId, setBorrowBookId] = useState(books[0]?.id || "");
+  const [borrowerKind, setBorrowerKind] = useState<"student" | "staff">(
+    "student",
+  );
   const [borrowStudentId, setBorrowStudentId] = useState("");
+  const [borrowStaffId, setBorrowStaffId] = useState("");
   const [typeId, setTypeId] = useState(bookTypes[0]?.id || "");
   const [addingType, setAddingType] = useState(false);
   const [newTypeName, setNewTypeName] = useState("");
+
+  const staffForSelect = useMemo(
+    () =>
+      staff.map((s) => ({
+        id: s.id,
+        full_name: s.full_name,
+        admission_no: s.staff_code || "—",
+      })),
+    [staff],
+  );
+
+  const borrowPersonId =
+    borrowerKind === "student" ? borrowStudentId : borrowStaffId;
 
   const filteredBooks = useMemo(() => {
     const q = bookQuery.trim().toLowerCase();
@@ -102,9 +130,35 @@ export function LibraryClient({
     [books],
   );
 
+  useEffect(() => {
+    if (
+      availableBooks.length > 0 &&
+      !availableBooks.some((b) => b.id === borrowBookId)
+    ) {
+      setBorrowBookId(availableBooks[0]!.id);
+    }
+    if (availableBooks.length === 0) setBorrowBookId("");
+  }, [availableBooks, borrowBookId]);
+
   return (
     <div className="space-y-6">
-      {message ? <p className="text-sm text-[#0b3d2e]">{message}</p> : null}
+      {message ? (
+        <p
+          role="status"
+          className={`rounded-lg border px-3 py-2 text-sm ${
+            message.toLowerCase().includes("fail") ||
+            message.toLowerCase().includes("forbidden") ||
+            message.toLowerCase().includes("error") ||
+            message.toLowerCase().includes("not found") ||
+            message.toLowerCase().includes("no copies") ||
+            message.toLowerCase().includes("required")
+              ? "border-red-200 bg-red-50 text-red-900"
+              : "border-emerald-200 bg-emerald-50 text-emerald-950"
+          }`}
+        >
+          {message}
+        </p>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
         {canManage ? (
@@ -284,24 +338,61 @@ export function LibraryClient({
             <CardHeader>
               <CardTitle>Borrow</CardTitle>
               <CardDescription>
-                Assign an available qitab to a student.
+                1) Add a book first if the list is empty. 2) Choose an available
+                qitab. 3) Pick Student or Staff, search and select them. 4)
+                Click Borrow. Active loans appear below.
               </CardDescription>
             </CardHeader>
             <CardContent>
+              {books.length === 0 ? (
+                <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                  No books yet. Use <strong>Add qitab</strong> on the left
+                  first, then come back here to borrow.
+                </p>
+              ) : availableBooks.length === 0 ? (
+                <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                  All copies are currently borrowed. Return a book from{" "}
+                  <strong>Active loans</strong> below, or add more copies.
+                </p>
+              ) : null}
               <form
                 className="space-y-3"
                 onSubmit={(e) => {
                   e.preventDefault();
+                  if (!borrowBookId) {
+                    setMessage("Select a book with available copies.");
+                    return;
+                  }
+                  if (!borrowPersonId) {
+                    setMessage(
+                      borrowerKind === "student"
+                        ? "Search the student, then select them from the dropdown."
+                        : "Search the staff member, then select them from the dropdown.",
+                    );
+                    return;
+                  }
                   setPendingAction("borrow");
                   startTransition(async () => {
                     try {
-                      const result = await borrowLibraryBookAction({
-                        book_id: borrowBookId,
-                        student_id: borrowStudentId,
-                      });
-                      setMessage(result.error ? result.error : "Borrowed");
+                      const result = await borrowLibraryBookAction(
+                        borrowerKind === "student"
+                          ? {
+                              book_id: borrowBookId,
+                              student_id: borrowStudentId,
+                            }
+                          : {
+                              book_id: borrowBookId,
+                              staff_id: borrowStaffId,
+                            },
+                      );
+                      setMessage(
+                        result.error
+                          ? result.error
+                          : "Borrowed — see Active loans below.",
+                      );
                       if (!result.error) {
                         setBorrowStudentId("");
+                        setBorrowStaffId("");
                         router.refresh();
                       }
                     } finally {
@@ -311,7 +402,7 @@ export function LibraryClient({
                 }}
               >
                 <div className="space-y-1">
-                  <Label>Book</Label>
+                  <Label>Book (available only)</Label>
                   <select
                     className="h-10 w-full rounded-lg border border-input bg-background px-2 md:h-9"
                     value={borrowBookId}
@@ -332,12 +423,63 @@ export function LibraryClient({
                     )}
                   </select>
                 </div>
-                <StudentSearchSelect
-                  students={students}
-                  value={borrowStudentId}
-                  onChange={setBorrowStudentId}
-                  required
-                />
+                <div className="space-y-1">
+                  <Label>Borrower</Label>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={
+                        borrowerKind === "student" ? "default" : "outline"
+                      }
+                      className={
+                        borrowerKind === "student" ? "bg-[#0b3d2e]" : ""
+                      }
+                      onClick={() => {
+                        setBorrowerKind("student");
+                        setBorrowStaffId("");
+                      }}
+                    >
+                      Student
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={borrowerKind === "staff" ? "default" : "outline"}
+                      className={borrowerKind === "staff" ? "bg-[#0b3d2e]" : ""}
+                      onClick={() => {
+                        setBorrowerKind("staff");
+                        setBorrowStudentId("");
+                      }}
+                    >
+                      Staff
+                    </Button>
+                  </div>
+                </div>
+                {borrowerKind === "student" ? (
+                  <StudentSearchSelect
+                    students={students}
+                    value={borrowStudentId}
+                    onChange={setBorrowStudentId}
+                    required
+                    emptyLabel="Select student after search…"
+                  />
+                ) : (
+                  <StudentSearchSelect
+                    students={staffForSelect}
+                    value={borrowStaffId}
+                    onChange={setBorrowStaffId}
+                    name="staff_id"
+                    id="staff_id"
+                    label="Staff"
+                    required
+                    emptyLabel="Select staff after search…"
+                  />
+                )}
+                <p className="text-xs text-[#5a6f65]">
+                  Tip: type a name or code in search, then pick from the list.
+                  Borrow stays disabled until a borrower is selected.
+                </p>
                 <Button
                   type="submit"
                   pending={pending && pendingAction === "borrow"}
@@ -345,10 +487,10 @@ export function LibraryClient({
                   disabled={
                     pending ||
                     !borrowBookId ||
-                    !borrowStudentId ||
+                    !borrowPersonId ||
                     availableBooks.length === 0
                   }
-                  variant="outline"
+                  className="bg-[#0b3d2e]"
                 >
                   Borrow
                 </Button>
@@ -459,8 +601,13 @@ export function LibraryClient({
                     .join(" · ") || "—"}
                 </p>
                 <p className="text-sm">
-                  {loan.student_name}{" "}
-                  <span className="text-[#5a6f65]">({loan.admission_no})</span>
+                  {loan.borrower_kind === "staff" ? (
+                    <span className="mr-1 text-xs font-medium uppercase tracking-wide text-[#5a6f65]">
+                      Staff
+                    </span>
+                  ) : null}
+                  {loan.borrower_name}{" "}
+                  <span className="text-[#5a6f65]">({loan.borrower_code})</span>
                 </p>
                 <p className="text-xs text-[#5a6f65]">
                   Borrowed {formatDate(loan.borrowed_at)} ·{" "}
