@@ -71,9 +71,13 @@ export function canManageClasses(role: string) {
   return isVendorAdmin(role);
 }
 
-/** Library catalog + loans manage — Admin only. Data entry can view page if linked. */
+/** Library catalog + loans — Admin and Data entry. */
 export function canManageLibrary(role: string) {
-  return isVendorAdmin(role);
+  return (
+    isVendorAdmin(role) ||
+    role === "data_entry" ||
+    role === "principal"
+  );
 }
 
 export function canLogProgress(role: string) {
