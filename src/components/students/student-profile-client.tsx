@@ -132,7 +132,7 @@ export function StudentProfileClient({
                     String(fd.get("emergency_contact_phone") || "") || null,
                   notes: String(fd.get("notes") || "") || null,
                 });
-                setMessage(result.error ? result.error : "Saved");
+                setMessage(result.error ? result.error : "Profile saved successfully");
                 if (!result.error) router.refresh();
               });
             }}

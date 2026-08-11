@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { toast } from "sonner";
 
 import {
   generateDuesAction,
@@ -23,7 +24,12 @@ import { formatMoney } from "@/lib/format";
 import { openWhatsAppLinks } from "@/lib/open-whatsapp";
 import { matchesStudentQuery } from "@/lib/student-search";
 
-type Student = { id: string; full_name: string; admission_no: string };
+type Student = {
+  id: string;
+  full_name: string;
+  admission_no: string;
+  guardian_phone?: string | null;
+};
 type Due = {
   id: string;
   student_id: string;
@@ -36,21 +42,40 @@ type Due = {
   carried_forward?: number;
   student_name?: string;
   admission_no?: string;
+  guardian_phone?: string | null;
 };
+
+type PaymentSummary = {
+  outstandingTotal: number;
+  unpaidCount: number;
+  monthApprovedTotal: number;
+  monthApprovedCount: number;
+  monthPendingTotal: number;
+  monthPendingCount: number;
+  todayApprovedTotal: number;
+  monthLabel: string;
+};
+
+type ReminderChannel = "sms" | "whatsapp";
 
 export function FeesOfficeClient({
   students,
   dues,
   canGenerate,
   canRemind,
+  canRecord,
+  summary,
 }: {
   students: Student[];
   dues: Due[];
   canGenerate: boolean;
   canRemind: boolean;
+  canRecord: boolean;
+  summary: PaymentSummary;
 }) {
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
+  const [messageOk, setMessageOk] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [query, setQuery] = useState("");
   const [pendingAction, setPendingAction] = useState<string | null>(null);
@@ -66,11 +91,21 @@ export function FeesOfficeClient({
             d.admission_no ||
             students.find((s) => s.id === d.student_id)?.admission_no,
           full_name: students.find((s) => s.id === d.student_id)?.full_name,
+          guardian_phone:
+            d.guardian_phone ||
+            students.find((s) => s.id === d.student_id)?.guardian_phone,
         },
         query,
       ),
     );
   }, [dues, query, students]);
+
+  const showResult = (text: string, ok: boolean) => {
+    setMessage(text);
+    setMessageOk(ok);
+    if (ok) toast.success(text);
+    else toast.error(text);
+  };
 
   const run = (key: string, fn: () => Promise<void>) => {
     setPendingAction(key);
@@ -83,9 +118,103 @@ export function FeesOfficeClient({
     });
   };
 
+  const remindSelected = (channel: ReminderChannel) => {
+    run(`bulk-${channel}`, async () => {
+      const result = await sendBulkFeeRemindersAction(selected, channel);
+      if (result.error) {
+        showResult(result.error, false);
+        return;
+      }
+      showResult(
+        result.message ||
+          `${channel === "sms" ? "SMS" : "WhatsApp"}: ${result.sent} ok, ${result.failed} failed`,
+        true,
+      );
+      if (channel === "whatsapp") openWhatsAppLinks(result.whatsappUrls);
+    });
+  };
+
+  const remindOne = (dueId: string, channel: ReminderChannel) => {
+    run(`${channel}-${dueId}`, async () => {
+      const result = await sendFeeReminderAction(dueId, channel);
+      if (result.error) {
+        showResult(result.error, false);
+        return;
+      }
+      showResult(
+        result.message ||
+          (channel === "sms" ? "SMS reminder sent" : "Opening WhatsApp…"),
+        true,
+      );
+      if (channel === "whatsapp" && result.whatsappUrl) {
+        openWhatsAppLinks(result.whatsappUrl);
+      }
+    });
+  };
+
   return (
     <div className="space-y-6">
-      {message ? <p className="text-sm">{message}</p> : null}
+      {message ? (
+        <div
+          role="status"
+          className={`rounded-lg border px-4 py-3 text-sm ${
+            messageOk
+              ? "border-emerald-300 bg-emerald-50 text-emerald-950"
+              : "border-red-200 bg-red-50 text-red-900"
+          }`}
+        >
+          {messageOk ? "✓ " : ""}
+          {message}
+        </div>
+      ) : null}
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Outstanding (open dues)</CardDescription>
+            <CardTitle className="text-xl">
+              {formatMoney(summary.outstandingTotal)}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-xs text-[#5a6f65]">
+            {summary.unpaidCount} open due{summary.unpaidCount === 1 ? "" : "s"}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Approved · {summary.monthLabel}</CardDescription>
+            <CardTitle className="text-xl">
+              {formatMoney(summary.monthApprovedTotal)}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-xs text-[#5a6f65]">
+            {summary.monthApprovedCount} payment
+            {summary.monthApprovedCount === 1 ? "" : "s"}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Pending review · {summary.monthLabel}</CardDescription>
+            <CardTitle className="text-xl">
+              {formatMoney(summary.monthPendingTotal)}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-xs text-[#5a6f65]">
+            {summary.monthPendingCount} awaiting approval
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Approved today</CardDescription>
+            <CardTitle className="text-xl">
+              {formatMoney(summary.todayApprovedTotal)}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-xs text-[#5a6f65]">
+            Payments summary for this branch
+          </CardContent>
+        </Card>
+      </div>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
         {canGenerate ? (
@@ -98,11 +227,9 @@ export function FeesOfficeClient({
             onClick={() => {
               run("generate", async () => {
                 const result = await generateDuesAction();
-                setMessage(
-                  result.error
-                    ? result.error
-                    : `Generated ${result.generated ?? 0} dues`,
-                );
+                if (result.error) showResult(result.error, false);
+                else
+                  showResult(`Generated ${result.generated ?? 0} dues`, true);
                 router.refresh();
               });
             }}
@@ -111,63 +238,105 @@ export function FeesOfficeClient({
           </Button>
         ) : null}
         {canRemind ? (
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full sm:w-auto"
-            pending={pending && pendingAction === "bulk"}
-            pendingLabel="Sending…"
-            disabled={pending || selected.length === 0}
-            onClick={() => {
-              run("bulk", async () => {
-                const result = await sendBulkFeeRemindersAction(selected);
-                if (result.error) {
-                  setMessage(result.error);
-                  return;
-                }
-                setMessage(
-                  result.message ||
-                    `Reminders: ${result.sent} ok, ${result.failed} failed`,
-                );
-                openWhatsAppLinks(result.whatsappUrls);
-              });
-            }}
-          >
-            SMS + WhatsApp remind selected ({selected.length})
-          </Button>
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              pending={pending && pendingAction === "bulk-sms"}
+              pendingLabel="Sending SMS…"
+              disabled={pending || selected.length === 0}
+              onClick={() => remindSelected("sms")}
+            >
+              SMS remind selected ({selected.length})
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              pending={pending && pendingAction === "bulk-whatsapp"}
+              pendingLabel="Opening WA…"
+              disabled={pending || selected.length === 0}
+              onClick={() => remindSelected("whatsapp")}
+            >
+              WhatsApp remind selected ({selected.length})
+            </Button>
+          </>
         ) : null}
       </div>
 
+      <Card className="border-[#0b3d2e]/20 bg-[#0b3d2e]/[0.03]">
+        <CardHeader className="pb-3">
+          <CardTitle>Search pending payments</CardTitle>
+          <CardDescription>
+            Find open dues by student name, admission ID, or guardian phone.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <StudentSearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder="Type name, admission ID, or phone…"
+            className="max-w-xl"
+          />
+          <p className="mt-2 text-xs text-[#5a6f65]">
+            Showing {outstanding.length} of{" "}
+            {dues.filter((d) => d.status !== "paid").length} pending dues
+          </p>
+        </CardContent>
+      </Card>
+
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Record payment</CardTitle>
-            <CardDescription>Starts accountant review.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <RecordPaymentForm
-              students={students}
-              dues={dues
-                .filter((d) => d.status !== "paid")
-                .map((d) => ({
-                  id: d.id,
-                  student_id: d.student_id,
-                  total_due: d.total_due,
-                  amount_paid: d.amount_paid,
-                  due_month: d.due_month,
-                  due_year: d.due_year,
-                }))}
-            />
-          </CardContent>
-        </Card>
+        {canRecord ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Record payment</CardTitle>
+              <CardDescription>
+                Submit for accountant review. You will see a clear success
+                message after saving.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <RecordPaymentForm
+                students={students}
+                dues={dues
+                  .filter((d) => d.status !== "paid")
+                  .map((d) => ({
+                    id: d.id,
+                    student_id: d.student_id,
+                    total_due: d.total_due,
+                    amount_paid: d.amount_paid,
+                    due_month: d.due_month,
+                    due_year: d.due_year,
+                  }))}
+                onSuccess={(msg) => {
+                  showResult(msg, true);
+                  router.refresh();
+                }}
+                onError={(msg) => showResult(msg, false)}
+              />
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>Record payment</CardTitle>
+              <CardDescription>
+                Only data entry / vendor admin can submit new payments. You can
+                still search and remind parents below.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>
             <CardTitle>Overdue / open dues</CardTitle>
-            <CardDescription>Select rows to bulk-remind parents.</CardDescription>
+            <CardDescription>
+              Select rows, then choose SMS or WhatsApp remind.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <StudentSearchInput value={query} onChange={setQuery} />
             <ul className="max-h-[480px] space-y-2 overflow-y-auto text-sm">
               {outstanding.map((d) => {
                 const bal = d.total_due - d.amount_paid;
@@ -178,7 +347,7 @@ export function FeesOfficeClient({
                 return (
                   <li
                     key={d.id}
-                    className="flex flex-col gap-3 rounded-lg border border-[#0b3d2e]/10 p-3 sm:flex-row sm:items-start sm:gap-2"
+                    className="flex flex-col gap-3 rounded-lg border border-[#0b3d2e]/10 p-3"
                   >
                     <div className="flex items-start gap-2">
                       <input
@@ -213,35 +382,36 @@ export function FeesOfficeClient({
                       </div>
                     </div>
                     {canRemind ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="w-full shrink-0 sm:w-auto"
-                        pending={pending && pendingAction === d.id}
-                        pendingLabel="…"
-                        disabled={pending}
-                        onClick={() => {
-                          run(d.id, async () => {
-                            const result = await sendFeeReminderAction(d.id);
-                            if (result.error) {
-                              setMessage(result.error);
-                              return;
-                            }
-                            setMessage(
-                              result.message ||
-                                (result.smsOk
-                                  ? "SMS sent · Opening WhatsApp…"
-                                  : "Opening WhatsApp…"),
-                            );
-                            if (result.whatsappUrl) {
-                              openWhatsAppLinks(result.whatsappUrl);
-                            }
-                          });
-                        }}
-                      >
-                        Remind
-                      </Button>
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="w-full sm:w-auto"
+                          pending={
+                            pending && pendingAction === `sms-${d.id}`
+                          }
+                          pendingLabel="SMS…"
+                          disabled={pending}
+                          onClick={() => remindOne(d.id, "sms")}
+                        >
+                          SMS
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="w-full sm:w-auto"
+                          pending={
+                            pending && pendingAction === `whatsapp-${d.id}`
+                          }
+                          pendingLabel="WA…"
+                          disabled={pending}
+                          onClick={() => remindOne(d.id, "whatsapp")}
+                        >
+                          WhatsApp
+                        </Button>
+                      </div>
                     ) : null}
                   </li>
                 );

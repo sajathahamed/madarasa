@@ -51,6 +51,7 @@ type DueRow = {
   student_id: string;
   student_name?: string;
   admission_no?: string;
+  guardian_phone?: string | null;
   due_month: number;
   due_year: number;
   month_amount: number;
@@ -141,7 +142,11 @@ export function AccountantDeskClient({
 
   const filteredDues = dues.filter((d) =>
     matchesStudentQuery(
-      { student_name: d.student_name, admission_no: d.admission_no },
+      {
+        student_name: d.student_name,
+        admission_no: d.admission_no,
+        guardian_phone: d.guardian_phone,
+      },
       dueQuery,
     ),
   );
@@ -429,38 +434,69 @@ export function AccountantDeskClient({
           <div>
             <CardTitle>Open student dues</CardTitle>
             <CardDescription>
-              Month fee + carried forward − paid. Select rows to WhatsApp remind.
+              Month fee + carried forward − paid. Select rows, then SMS or
+              WhatsApp remind.
             </CardDescription>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            pending={pending && pendingAction === "bulk-remind"}
-            pendingLabel="Sending…"
-            disabled={pending || selected.length === 0}
-            onClick={() => {
-              run("bulk-remind", async () => {
-                const result = await sendBulkFeeRemindersAction(selected);
-                if (result.error) {
-                  setMessage(result.error);
-                  return;
-                }
-                setMessage(
-                  result.message ||
-                    `Reminders: ${result.sent} ok, ${result.failed} failed`,
-                );
-                openWhatsAppLinks(result.whatsappUrls);
-              });
-            }}
-          >
-            SMS + WhatsApp remind selected ({selected.length})
-          </Button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button
+              type="button"
+              variant="outline"
+              pending={pending && pendingAction === "bulk-sms"}
+              pendingLabel="Sending SMS…"
+              disabled={pending || selected.length === 0}
+              onClick={() => {
+                run("bulk-sms", async () => {
+                  const result = await sendBulkFeeRemindersAction(
+                    selected,
+                    "sms",
+                  );
+                  if (result.error) {
+                    setMessage(result.error);
+                    return;
+                  }
+                  setMessage(
+                    result.message ||
+                      `SMS: ${result.sent} ok, ${result.failed} failed`,
+                  );
+                });
+              }}
+            >
+              SMS selected ({selected.length})
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              pending={pending && pendingAction === "bulk-whatsapp"}
+              pendingLabel="Opening WA…"
+              disabled={pending || selected.length === 0}
+              onClick={() => {
+                run("bulk-whatsapp", async () => {
+                  const result = await sendBulkFeeRemindersAction(
+                    selected,
+                    "whatsapp",
+                  );
+                  if (result.error) {
+                    setMessage(result.error);
+                    return;
+                  }
+                  setMessage(
+                    result.message ||
+                      `WhatsApp: ${result.sent} ok, ${result.failed} failed`,
+                  );
+                  openWhatsAppLinks(result.whatsappUrls);
+                });
+              }}
+            >
+              WhatsApp selected ({selected.length})
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-3">
           <StudentSearchInput
             value={dueQuery}
             onChange={setDueQuery}
-            placeholder="Search dues by student name or ID…"
+            placeholder="Search pending by name, admission ID, or phone…"
             className="max-w-none"
           />
           <p className="text-xs text-[#5a6f65] md:hidden">
@@ -528,32 +564,63 @@ export function AccountantDeskClient({
                         {formatMoney(bal)}
                       </td>
                       <td className="px-2 py-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          pending={pending && pendingAction === `remind-${d.id}`}
-                          pendingLabel="…"
-                          disabled={pending}
-                          onClick={() => {
-                            run(`remind-${d.id}`, async () => {
-                              const result = await sendFeeReminderAction(d.id);
-                              if (result.error) {
-                                setMessage(result.error);
-                                return;
-                              }
-                              setMessage(
-                                result.message ||
-                                  (result.smsOk
-                                    ? "SMS sent · Opening WhatsApp…"
-                                    : "Opening WhatsApp…"),
-                              );
-                              openWhatsAppLinks(result.whatsappUrl);
-                            });
-                          }}
-                        >
-                          Remind
-                        </Button>
+                        <div className="flex flex-col gap-1">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            pending={
+                              pending && pendingAction === `sms-${d.id}`
+                            }
+                            pendingLabel="…"
+                            disabled={pending}
+                            onClick={() => {
+                              run(`sms-${d.id}`, async () => {
+                                const result = await sendFeeReminderAction(
+                                  d.id,
+                                  "sms",
+                                );
+                                if (result.error) {
+                                  setMessage(result.error);
+                                  return;
+                                }
+                                setMessage(
+                                  result.message || "SMS reminder sent",
+                                );
+                              });
+                            }}
+                          >
+                            SMS
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            pending={
+                              pending && pendingAction === `wa-${d.id}`
+                            }
+                            pendingLabel="…"
+                            disabled={pending}
+                            onClick={() => {
+                              run(`wa-${d.id}`, async () => {
+                                const result = await sendFeeReminderAction(
+                                  d.id,
+                                  "whatsapp",
+                                );
+                                if (result.error) {
+                                  setMessage(result.error);
+                                  return;
+                                }
+                                setMessage(
+                                  result.message || "Opening WhatsApp…",
+                                );
+                                openWhatsAppLinks(result.whatsappUrl);
+                              });
+                            }}
+                          >
+                            WhatsApp
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );

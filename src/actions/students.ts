@@ -2,11 +2,12 @@
 
 import { z } from "zod";
 
-import { canEnterData, requireProfile } from "@/lib/auth/session";
+import { canEditStudent, requireProfile } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   notifyAbsence,
   notifyPaymentReminder,
+  type ReminderChannel,
 } from "@/lib/notify";
 
 const updateStudentSchema = z.object({
@@ -35,7 +36,7 @@ export async function updateStudentAction(
   try {
     const auth = await requireProfile();
     if ("error" in auth) return { error: auth.error };
-    if (!canEnterData(auth.profile.role)) return { error: "Forbidden" };
+    if (!canEditStudent(auth.profile.role)) return { error: "Forbidden" };
 
     const parsed = updateStudentSchema.safeParse(input);
     if (!parsed.success) {
@@ -96,7 +97,7 @@ export async function changeFeePlanAction(
   try {
     const auth = await requireProfile();
     if ("error" in auth) return { error: auth.error };
-    if (!canEnterData(auth.profile.role)) return { error: "Forbidden" };
+    if (!canEditStudent(auth.profile.role)) return { error: "Forbidden" };
 
     const parsed = feePlanSchema.safeParse(input);
     if (!parsed.success) {
@@ -155,7 +156,10 @@ export async function generateDuesAction(month?: number, year?: number) {
   }
 }
 
-export async function sendFeeReminderAction(dueId: string) {
+export async function sendFeeReminderAction(
+  dueId: string,
+  channel: ReminderChannel = "whatsapp",
+) {
   try {
     const auth = await requireProfile();
     if ("error" in auth) return { error: auth.error };
@@ -193,9 +197,10 @@ export async function sendFeeReminderAction(dueId: string) {
       period: `${due.due_month}/${due.due_year}`,
       vendorId: due.vendor_id,
       studentId: due.student_id,
+      channel,
     });
 
-    if (!result.ok && !result.whatsappUrl) {
+    if (!result.ok && !(channel === "whatsapp" && result.whatsappUrl)) {
       return { error: result.message || "Failed to send reminder" };
     }
 
@@ -205,6 +210,7 @@ export async function sendFeeReminderAction(dueId: string) {
       whatsappUrl: result.whatsappUrl,
       smsOk: result.sms?.ok ?? false,
       phone: result.phone,
+      channel,
     };
   } catch (err) {
     console.error("[sendFeeReminderAction]", err);
@@ -214,7 +220,10 @@ export async function sendFeeReminderAction(dueId: string) {
   }
 }
 
-export async function sendBulkFeeRemindersAction(dueIds: string[]) {
+export async function sendBulkFeeRemindersAction(
+  dueIds: string[],
+  channel: ReminderChannel = "whatsapp",
+) {
   try {
     const auth = await requireProfile();
     if ("error" in auth) return { error: auth.error };
@@ -232,7 +241,7 @@ export async function sendBulkFeeRemindersAction(dueIds: string[]) {
     const messages: string[] = [];
 
     for (const id of dueIds.slice(0, 100)) {
-      const result = await sendFeeReminderAction(id);
+      const result = await sendFeeReminderAction(id, channel);
       if (result.error) {
         failed += 1;
         messages.push(result.error);
@@ -242,14 +251,16 @@ export async function sendBulkFeeRemindersAction(dueIds: string[]) {
         if (result.message) messages.push(result.message);
       }
     }
+    const channelLabel = channel === "sms" ? "SMS" : "WhatsApp";
     return {
       ok: true as const,
       sent,
       failed,
       whatsappUrls,
+      channel,
       message:
         messages[0] ||
-        `Reminders: ${sent} ok, ${failed} failed · Opening WhatsApp…`,
+        `${channelLabel} reminders: ${sent} ok, ${failed} failed`,
     };
   } catch (err) {
     console.error("[sendBulkFeeRemindersAction]", err);

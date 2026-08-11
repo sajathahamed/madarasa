@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { StudentProfileClient } from "@/components/students/student-profile-client";
-import { canEnterData } from "@/lib/auth/session";
+import { canEditStudent } from "@/lib/auth/session";
 import { OpsShell } from "@/components/layout/ops-shell";
 import { requireOpsContext } from "@/lib/ops-page";
 
@@ -72,7 +72,7 @@ export default async function StudentDetailPage({
           method: p.method,
           created_at: p.created_at,
         }))}
-        canEdit={canEnterData(profile.role)}
+        canEdit={canEditStudent(profile.role)}
       />
     </OpsShell>
   );

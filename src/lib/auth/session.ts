@@ -32,6 +32,22 @@ export function canEnterData(role: string) {
   return ["super_admin", "vendor_admin", "data_entry"].includes(role);
 }
 
+/** Profile + fee plan edits (ops staff including accountant/principal). */
+export function canEditStudent(role: string) {
+  return [
+    "super_admin",
+    "vendor_admin",
+    "data_entry",
+    "accountant",
+    "principal",
+  ].includes(role);
+}
+
+/** Separate admin dashboard: delete / void operational records. */
+export function canManageAdminOps(role: string) {
+  return ["super_admin", "vendor_admin", "principal"].includes(role);
+}
+
 export function canMarkAttendance(role: string) {
   return [
     "super_admin",
@@ -84,6 +100,9 @@ export function opsNav(profile: AppUser) {
           { href: "/branch/reports", label: "Reports" },
         ];
 
+  if (canManageAdminOps(profile.role)) {
+    items.push({ href: "/branch/admin", label: "Admin" });
+  }
   if (profile.role === "vendor_admin") {
     items.push({ href: "/vendor", label: "Vendor" });
   }

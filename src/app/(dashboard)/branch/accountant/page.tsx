@@ -95,9 +95,16 @@ export default async function AccountantDeskPage() {
     studentIds.length > 0
       ? await supabase
           .from("students")
-          .select("id, full_name, admission_no")
+          .select("id, full_name, admission_no, guardian_phone")
           .in("id", studentIds)
-      : { data: [] as { id: string; full_name: string; admission_no: string }[] };
+      : {
+          data: [] as {
+            id: string;
+            full_name: string;
+            admission_no: string;
+            guardian_phone: string;
+          }[],
+        };
 
   const byId = new Map((students ?? []).map((s) => [s.id, s]));
 
@@ -106,6 +113,7 @@ export default async function AccountantDeskPage() {
     student_id: d.student_id,
     student_name: byId.get(d.student_id)?.full_name,
     admission_no: byId.get(d.student_id)?.admission_no,
+    guardian_phone: byId.get(d.student_id)?.guardian_phone,
     due_month: d.due_month,
     due_year: d.due_year,
     month_amount: Number(d.month_amount),

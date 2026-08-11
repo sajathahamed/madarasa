@@ -85,6 +85,8 @@ export async function notifyPaymentConfirmation(opts: {
   return results;
 }
 
+export type ReminderChannel = "sms" | "whatsapp";
+
 export async function notifyPaymentReminder(opts: {
   to: string;
   studentName: string;
@@ -92,8 +94,14 @@ export async function notifyPaymentReminder(opts: {
   period: string;
   vendorId?: string | null;
   studentId?: string | null;
+  /** Default: both channels. Pass one channel for SMS-only or WhatsApp-only. */
+  channel?: ReminderChannel | "both";
 }): Promise<ReminderNotifyResult> {
-  const ch = channels();
+  const mode = opts.channel ?? "both";
+  const wantSms = mode === "sms" || mode === "both";
+  const wantWhatsApp = mode === "whatsapp" || mode === "both";
+  const envChannels = channels();
+
   const text = feeReminderMessage({
     studentName: opts.studentName,
     amount: opts.amount,
@@ -106,15 +114,14 @@ export async function notifyPaymentReminder(opts: {
       ok: false,
       message: "Invalid guardian phone number",
       phone: opts.to,
-      whatsappUrl,
+      whatsappUrl: wantWhatsApp ? whatsappUrl : "",
     };
   }
 
   let sms: SmsResult | undefined;
   let whatsapp: NotifyChannelResult | undefined;
 
-  // Prefer API send when configured; UI still opens wa.me for manual send
-  if (ch.has("whatsapp") && isWhatsAppApiConfigured()) {
+  if (wantWhatsApp && envChannels.has("whatsapp") && isWhatsAppApiConfigured()) {
     const wa = await sendPaymentReminderWhatsApp(opts);
     whatsapp = {
       ok: wa.ok,
@@ -123,7 +130,7 @@ export async function notifyPaymentReminder(opts: {
     };
   }
 
-  if (ch.has("sms") || isDialogSmsConfigured()) {
+  if (wantSms && (envChannels.has("sms") || isDialogSmsConfigured())) {
     sms = await sendDialogSms({
       to: opts.to,
       message: text,
@@ -134,29 +141,40 @@ export async function notifyPaymentReminder(opts: {
   }
 
   const smsOk = sms?.ok === true;
-  const waOk = whatsapp?.ok === true;
-  const ok = smsOk || waOk || Boolean(whatsappUrl);
+  const waApiOk = whatsapp?.ok === true;
+  const ok =
+    (wantSms && smsOk) ||
+    (wantWhatsApp && (waApiOk || Boolean(whatsappUrl))) ||
+    (!wantSms && !wantWhatsApp);
 
   const parts: string[] = [];
-  if (sms) {
-    parts.push(
-      sms.ok
-        ? "SMS sent (Upview Tech)"
-        : `SMS failed: ${sms.error || "unknown error"}`,
-    );
+  if (wantSms) {
+    if (sms) {
+      parts.push(
+        sms.ok
+          ? "SMS sent (Upview Tech)"
+          : `SMS failed: ${sms.error || "unknown error"}`,
+      );
+    } else if (!isDialogSmsConfigured()) {
+      parts.push("SMS not configured — add Dialog SMS credentials");
+    }
   }
-  if (whatsapp) {
-    parts.push(whatsapp.ok ? "WhatsApp API sent" : `WhatsApp API: ${whatsapp.error}`);
+  if (wantWhatsApp) {
+    if (whatsapp) {
+      parts.push(
+        whatsapp.ok ? "WhatsApp API sent" : `WhatsApp API: ${whatsapp.error}`,
+      );
+    }
+    parts.push("Opening WhatsApp chat…");
   }
-  parts.push("Opening WhatsApp chat…");
 
   return {
     ok,
-    message: parts.join(" · "),
+    message: parts.join(" · ") || "Done",
     phone: opts.to,
     sms: asChannelResult(sms),
     whatsapp,
-    whatsappUrl,
+    whatsappUrl: wantWhatsApp ? whatsappUrl : "",
   };
 }
 
