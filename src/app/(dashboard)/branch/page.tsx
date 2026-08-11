@@ -7,6 +7,7 @@ import {
   ModuleLink,
   StatCard,
 } from "@/components/dashboard/ui";
+import { roleLabel } from "@/lib/auth/roles";
 import { formatMoney } from "@/lib/format";
 import { notificationStatus } from "@/lib/notify";
 
@@ -63,8 +64,8 @@ export default async function BranchOverviewPage() {
   const allLinks = [
     {
       href: "/branch/accountant",
-      title: "Accountant desk",
-      description: "Approvals, carry-forward dues, reminders",
+      title: "Approvals desk",
+      description: "Review & approve payments, dues, reminders",
       roles: ["accountant", "principal", "vendor_admin", "super_admin"],
     },
     {
@@ -81,9 +82,18 @@ export default async function BranchOverviewPage() {
     },
     {
       href: "/branch/approvals",
-      title: "Approvals",
-      description: "Accountant → Principal queue",
-      roles: ["accountant", "principal", "vendor_admin", "super_admin"],
+      title: role === "data_entry" ? "My submissions" : "Approvals",
+      description:
+        role === "data_entry"
+          ? "Track payments you submitted for admin review"
+          : "Approve payments submitted by data entry",
+      roles: [
+        "accountant",
+        "principal",
+        "vendor_admin",
+        "super_admin",
+        "data_entry",
+      ],
     },
     {
       href: "/branch/donations",
@@ -110,17 +120,35 @@ export default async function BranchOverviewPage() {
       roles: ["super_admin", "vendor_admin", "data_entry", "principal"],
     },
     {
+      href: "/branch/sms",
+      title: "Send SMS",
+      description: "Compose custom parent SMS",
+      roles: [
+        "super_admin",
+        "vendor_admin",
+        "data_entry",
+        "accountant",
+        "principal",
+      ],
+    },
+    {
       href: "/branch/reports",
       title: "Reports",
       description: "Collection, attendance, at-risk",
-      roles: ["super_admin", "vendor_admin", "accountant", "principal"],
+      roles: [
+        "super_admin",
+        "vendor_admin",
+        "data_entry",
+        "accountant",
+        "principal",
+      ],
     },
   ].filter((l) => l.roles.includes(role));
 
   const greetings: Record<string, { title: string; subtitle: string }> = {
     data_entry: {
-      title: "Today’s school office",
-      subtitle: "Admit students, record fees, and keep class rolls ready.",
+      title: "Data entry workspace",
+      subtitle: "Admit students, record fees, attendance, and class work.",
     },
     accountant: {
       title: "Finance control room",
@@ -131,8 +159,9 @@ export default async function BranchOverviewPage() {
       subtitle: "Approve money, monitor attendance, and follow student progress.",
     },
     vendor_admin: {
-      title: "Branch operations",
-      subtitle: "Run the full madrasa stack from one calm workspace.",
+      title: "Admin workspace",
+      subtitle:
+        "Full visibility — approve data entry work, reports, and admin tools.",
     },
     super_admin: {
       title: "Branch operations",
@@ -147,7 +176,7 @@ export default async function BranchOverviewPage() {
     <OpsShell
       profile={profile}
       title="Dashboard"
-      subtitle={`${(profile.role || "").replaceAll("_", " ")} workspace`}
+      subtitle={`${roleLabel(profile.role)} workspace`}
     >
       <DashboardHero
         eyebrow="Madarasa · مدرسة"
@@ -205,11 +234,20 @@ export default async function BranchOverviewPage() {
         ))}
       </div>
 
+      {role === "vendor_admin" ? (
+        <p className="mt-6 text-sm text-[#5a6f65]">
+          Review data entry submissions at the{" "}
+          <Link href="/branch/accountant" className="text-[#0b3d2e] underline">
+            Approvals desk
+          </Link>
+          .
+        </p>
+      ) : null}
       {role === "accountant" ? (
         <p className="mt-6 text-sm text-[#5a6f65]">
           Prefer the focused desk?{" "}
           <Link href="/branch/accountant" className="text-[#0b3d2e] underline">
-            Open Accountant desk
+            Open Approvals desk
           </Link>
         </p>
       ) : null}

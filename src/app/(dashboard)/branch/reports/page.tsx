@@ -7,7 +7,7 @@ import {
   type PrincipalReportData,
 } from "@/components/reports/principal-report-document";
 import { requireOpsContext } from "@/lib/ops-page";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, pendingMonthsFromAmount } from "@/lib/format";
 import {
   Card,
   CardContent,
@@ -185,11 +185,12 @@ export default async function ReportsPage() {
   ]);
 
   const atRiskCsv = toCsv([
-    ["student", "admission", "balance", "attendance_pct"],
+    ["student", "admission", "balance", "pending_months", "attendance_pct"],
     ...atRisk.map((r) => [
       r.name,
       r.admission_no,
       String(r.balance),
+      String(pendingMonthsFromAmount(r.balance)),
       r.attendance_pct == null ? "" : String(Math.round(r.attendance_pct)),
     ]),
   ]);

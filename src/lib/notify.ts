@@ -7,7 +7,12 @@
  * - Always return a wa.me click-to-chat URL so the UI can open WhatsApp
  */
 
-import { sendDialogSms, isDialogSmsConfigured, type SmsResult } from "@/lib/sms/dialog";
+import {
+  sendDialogSms,
+  isDialogSmsConfigured,
+  dialogSmsMask,
+  type SmsResult,
+} from "@/lib/sms/dialog";
 import {
   buildWhatsAppLink,
   feeReminderMessage,
@@ -240,9 +245,6 @@ export function notificationStatus() {
     channels: [...channels()],
     dialogConfigured: isDialogSmsConfigured(),
     whatsappApiConfigured: isWhatsAppApiConfigured(),
-    smsMask:
-      process.env.DIALOG_SMS_MASK ||
-      process.env.DIALOG_SMS_SENDER ||
-      "Upview Tech",
+    smsMask: dialogSmsMask(),
   };
 }

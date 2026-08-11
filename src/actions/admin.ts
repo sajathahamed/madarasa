@@ -194,8 +194,11 @@ export async function createAppUserAction(input: {
     if (!parsed.success) return { error: formatZodError(parsed.error) };
 
     if (auth.profile.role === "vendor_admin") {
-      if (parsed.data.role === "super_admin") {
-        return { error: "Vendor admins cannot create super admins." };
+      if (!["vendor_admin", "data_entry"].includes(parsed.data.role)) {
+        return {
+          error:
+            "Vendor admins can only create Admin or Data entry staff for their madrasa.",
+        };
       }
       if (parsed.data.vendor_id !== auth.profile.vendor_id) {
         return { error: "You can only create users for your own madrasa." };

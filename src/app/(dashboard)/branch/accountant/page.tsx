@@ -136,8 +136,8 @@ export default async function AccountantDeskPage() {
   return (
     <OpsShell
       profile={profile}
-      title="Accountant desk"
-      subtitle="Approvals · carry-forward · collection"
+      title="Approvals desk"
+      subtitle="Review data-entry payments · dues · collection"
     >
       <AccountantDeskClient
         role={profile.role}

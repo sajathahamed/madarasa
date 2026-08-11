@@ -21,7 +21,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatDate, formatMoney, formatPendingMonths } from "@/lib/format";
 import { openWhatsAppLinks } from "@/lib/open-whatsapp";
 import { matchesStudentQuery } from "@/lib/student-search";
 import type { UserRole } from "@/types/database";
@@ -263,7 +263,8 @@ export function AccountantDeskClient({
           <CardHeader>
             <CardTitle>Payment approval queue</CardTitle>
             <CardDescription>
-              Accountant review → Principal → ledger + WhatsApp confirm.
+              Admin can approve in one step. Legacy: Accountant → Principal →
+              ledger + WhatsApp confirm.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -503,7 +504,7 @@ export function AccountantDeskClient({
             Swipe sideways to see all columns
           </p>
           <div className="-mx-4 overflow-x-auto overscroll-x-contain px-4 sm:mx-0 sm:px-0">
-            <table className="w-full min-w-[44rem] text-left text-sm">
+            <table className="w-full min-w-[50rem] text-left text-sm">
               <thead className="border-b border-[#0b3d2e]/10 text-[#5a6f65]">
                 <tr>
                   <th className="px-2 py-2"></th>
@@ -513,6 +514,7 @@ export function AccountantDeskClient({
                   <th className="px-2 py-2 font-medium">Carried</th>
                   <th className="px-2 py-2 font-medium">Paid</th>
                   <th className="px-2 py-2 font-medium">Balance</th>
+                  <th className="px-2 py-2 font-medium">Pending</th>
                   <th className="px-2 py-2 font-medium"></th>
                 </tr>
               </thead>
@@ -562,6 +564,9 @@ export function AccountantDeskClient({
                       </td>
                       <td className="px-2 py-2 font-medium">
                         {formatMoney(bal)}
+                      </td>
+                      <td className="px-2 py-2 whitespace-nowrap text-[#0b3d2e]">
+                        {formatPendingMonths(bal)}
                       </td>
                       <td className="px-2 py-2">
                         <div className="flex flex-col gap-1">
@@ -627,7 +632,7 @@ export function AccountantDeskClient({
                 })}
                 {filteredDues.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-2 py-6 text-[#5a6f65]">
+                    <td colSpan={9} className="px-2 py-6 text-[#5a6f65]">
                       {dues.length === 0
                         ? "No open dues. Generate this month&apos;s dues if the cron has not run yet."
                         : "No dues match your search."}

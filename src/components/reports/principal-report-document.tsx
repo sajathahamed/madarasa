@@ -1,4 +1,4 @@
-import { formatMoney } from "@/lib/format";
+import { formatMoney, formatPendingMonths } from "@/lib/format";
 
 export type PrincipalReportData = {
   vendorName: string;
@@ -48,7 +48,7 @@ export function buildPrincipalReportShareText(data: PrincipalReportData) {
       const att =
         r.attendance_pct == null ? "n/a" : `${Math.round(r.attendance_pct)}%`;
       lines.push(
-        `• ${r.name} (${r.admission_no || "—"}) — ${formatMoney(r.balance)} · att ${att}`,
+        `• ${r.name} (${r.admission_no || "—"}) — ${formatMoney(r.balance)} (${formatPendingMonths(r.balance)}) · att ${att}`,
       );
     }
     if (data.atRisk.length > 25) {
@@ -149,6 +149,7 @@ export function PrincipalReportDocument({ data }: { data: PrincipalReportData })
                   <th className="px-2 py-2 font-medium">Student</th>
                   <th className="px-2 py-2 font-medium">Admission</th>
                   <th className="px-2 py-2 font-medium">Balance</th>
+                  <th className="px-2 py-2 font-medium">Pending</th>
                   <th className="px-2 py-2 font-medium">Attendance</th>
                 </tr>
               </thead>
@@ -161,6 +162,9 @@ export function PrincipalReportDocument({ data }: { data: PrincipalReportData })
                     <td className="px-2 py-2">{r.name}</td>
                     <td className="px-2 py-2">{r.admission_no || "—"}</td>
                     <td className="px-2 py-2">{formatMoney(r.balance)}</td>
+                    <td className="px-2 py-2 whitespace-nowrap">
+                      {formatPendingMonths(r.balance)}
+                    </td>
                     <td className="px-2 py-2">
                       {r.attendance_pct == null
                         ? "—"

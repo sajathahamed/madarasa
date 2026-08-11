@@ -6,17 +6,36 @@ import { createStudentAction } from "@/actions/operations";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { classDisplayName } from "@/lib/academic-sections";
+import type { AcademicSection } from "@/types/database";
+
+type ClassOption = {
+  id: string;
+  name: string;
+  section: AcademicSection | null;
+  grade: number | null;
+};
 
 export function CreateStudentForm({
   vendorId,
   branchId,
+  classes = [],
 }: {
   vendorId: string;
   branchId: string;
+  classes?: ClassOption[];
 }) {
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [isFree, setIsFree] = useState(false);
+
+  const sectionClasses = classes
+    .filter((c) => c.section === "hifz" || c.section === "sariya")
+    .sort((a, b) => {
+      if (a.section === "hifz" && b.section !== "hifz") return -1;
+      if (b.section === "hifz" && a.section !== "hifz") return 1;
+      return (a.grade ?? 0) - (b.grade ?? 0);
+    });
 
   if (!vendorId || !branchId) {
     return (
@@ -33,6 +52,7 @@ export function CreateStudentForm({
         e.preventDefault();
         const form = e.currentTarget;
         const fd = new FormData(form);
+        const classId = String(fd.get("class_id") ?? "");
         startTransition(async () => {
           const result = await createStudentAction({
             vendor_id: vendorId,
@@ -55,6 +75,7 @@ export function CreateStudentForm({
               String(fd.get("emergency_contact_name") ?? "") || undefined,
             emergency_contact_phone:
               String(fd.get("emergency_contact_phone") ?? "") || undefined,
+            class_id: classId || undefined,
           });
           setMessage(result.error ? result.error : "Student created");
           if (!result.error) form.reset();
@@ -68,6 +89,30 @@ export function CreateStudentForm({
       <div className="space-y-1">
         <Label htmlFor="full_name">Full name</Label>
         <Input id="full_name" name="full_name" required />
+      </div>
+      <div className="space-y-1 sm:col-span-2">
+        <Label htmlFor="class_id">Section / class</Label>
+        <select
+          id="class_id"
+          name="class_id"
+          required
+          className="h-10 w-full rounded-lg border border-input bg-background px-2 md:h-9"
+          defaultValue=""
+        >
+          <option value="" disabled>
+            Select Hifz or Sariya 1–7
+          </option>
+          {sectionClasses.map((c) => (
+            <option key={c.id} value={c.id}>
+              {classDisplayName(c.section, c.grade, c.name)}
+            </option>
+          ))}
+        </select>
+        {sectionClasses.length === 0 ? (
+          <p className="text-xs text-[#5a6f65]">
+            No Hifz/Sariya classes yet — open Classes to create them first.
+          </p>
+        ) : null}
       </div>
       <div className="space-y-1">
         <Label htmlFor="guardian_name">Guardian name</Label>

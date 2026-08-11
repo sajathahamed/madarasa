@@ -192,7 +192,7 @@ export default async function VendorDashboardPage() {
         { href: "/branch/students", label: "Students" },
         { href: "/vendor#finance", label: "Finance" },
         { href: "/branch", label: "Branch ops" },
-        { href: "/branch/accountant", label: "Accountant" },
+        { href: "/branch/accountant", label: "Approvals" },
         { href: "/branch/reports", label: "Reports" },
       ]}
     >
@@ -239,7 +239,7 @@ export default async function VendorDashboardPage() {
           href="/branch/accountant"
           className="rounded-full border border-[#0b3d2e]/25 px-4 py-2 text-[#0b3d2e]"
         >
-          Accountant desk
+          Approvals desk
         </Link>
         <a
           href="#create-staff"
@@ -378,7 +378,7 @@ export default async function VendorDashboardPage() {
       >
         {(ledger ?? []).length === 0 ? (
           <EmptyRow colSpan={6}>
-            No posted ledger entries yet (appear after principal approval).
+            No posted ledger entries yet (appear after admin approval).
           </EmptyRow>
         ) : (
           (ledger ?? []).map((e) => (
@@ -434,7 +434,7 @@ export default async function VendorDashboardPage() {
           <CardHeader>
             <CardTitle>Add staff user</CardTitle>
             <CardDescription>
-              Vendor admin, data entry, accountant, or principal.
+              Two levels only: Admin (full oversight) or Data entry (ops entry).
             </CardDescription>
           </CardHeader>
           <CardContent>

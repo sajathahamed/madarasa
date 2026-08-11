@@ -1,3 +1,4 @@
+import { roleLabel } from "@/lib/auth/roles";
 import { cn } from "@/lib/utils";
 
 const STYLES: Record<string, string> = {
@@ -18,7 +19,18 @@ const STYLES: Record<string, string> = {
   data_entry: "bg-slate-100 text-slate-800",
   accountant: "bg-indigo-100 text-indigo-900",
   principal: "bg-orange-100 text-orange-900",
+  hifz: "bg-teal-100 text-teal-900",
+  sariya: "bg-sky-100 text-sky-900",
+  unassigned: "bg-zinc-100 text-zinc-700",
 };
+
+const ROLE_VALUES = new Set([
+  "super_admin",
+  "vendor_admin",
+  "data_entry",
+  "accountant",
+  "principal",
+]);
 
 export function StatusBadge({
   value,
@@ -27,6 +39,14 @@ export function StatusBadge({
   value: string;
   className?: string;
 }) {
+  const label = ROLE_VALUES.has(value)
+    ? roleLabel(value)
+    : value === "hifz"
+      ? "Hifz"
+      : value === "sariya"
+        ? "Sariya"
+        : value.replaceAll("_", " ");
+
   return (
     <span
       className={cn(
@@ -35,7 +55,7 @@ export function StatusBadge({
         className,
       )}
     >
-      {value.replaceAll("_", " ")}
+      {label}
     </span>
   );
 }

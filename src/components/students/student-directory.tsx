@@ -5,7 +5,9 @@ import { useMemo, useState } from "react";
 
 import { StudentSearchInput } from "@/components/students/student-search-input";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { sectionBadgeValue, sectionLabel } from "@/lib/academic-sections";
 import { matchesStudentQuery } from "@/lib/student-search";
+import type { AcademicSection } from "@/types/database";
 
 type Row = {
   id: string;
@@ -14,18 +16,25 @@ type Row = {
   guardian_phone: string;
   status: string;
   branch_name?: string;
+  section?: AcademicSection | null;
+  grade?: number | null;
+  class_name?: string | null;
 };
 
 export function StudentDirectory({ students }: { students: Row[] }) {
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("all");
+  const [section, setSection] = useState("all");
 
   const filtered = useMemo(() => {
     return students.filter((s) => {
       if (status !== "all" && s.status !== status) return false;
+      if (section === "hifz" && s.section !== "hifz") return false;
+      if (section === "sariya" && s.section !== "sariya") return false;
+      if (section === "unassigned" && s.section) return false;
       return matchesStudentQuery(s, q);
     });
-  }, [students, q, status]);
+  }, [students, q, status, section]);
 
   return (
     <div className="space-y-4">
@@ -41,15 +50,26 @@ export function StudentDirectory({ students }: { students: Row[] }) {
           <option value="left">Left</option>
           <option value="graduated">Graduated</option>
         </select>
+        <select
+          value={section}
+          onChange={(e) => setSection(e.target.value)}
+          className="h-10 w-full rounded-lg border border-input bg-background px-2 text-sm sm:w-auto md:h-9"
+        >
+          <option value="all">All sections</option>
+          <option value="hifz">Hifz</option>
+          <option value="sariya">Sariya</option>
+          <option value="unassigned">Unassigned</option>
+        </select>
       </div>
 
       <div className="-mx-4 overflow-x-auto overscroll-x-contain px-4 sm:mx-0 sm:px-0">
         <div className="overflow-hidden rounded-xl border border-[#0b3d2e]/10 bg-white/70">
-          <table className="w-full min-w-[28rem] text-left text-sm">
+          <table className="w-full min-w-[32rem] text-left text-sm">
             <thead className="border-b border-[#0b3d2e]/10 text-[#5a6f65]">
               <tr>
                 <th className="px-3 py-2.5 font-medium">Student</th>
                 <th className="px-3 py-2.5 font-medium">Admission</th>
+                <th className="px-3 py-2.5 font-medium">Section</th>
                 <th className="hidden px-3 py-2.5 font-medium sm:table-cell">
                   Guardian
                 </th>
@@ -74,6 +94,12 @@ export function StudentDirectory({ students }: { students: Row[] }) {
                     </p>
                   </td>
                   <td className="px-3 py-3">{s.admission_no}</td>
+                  <td className="px-3 py-3">
+                    <StatusBadge value={sectionBadgeValue(s.section)} />
+                    <p className="mt-0.5 text-xs text-[#5a6f65]">
+                      {sectionLabel(s.section, s.grade)}
+                    </p>
+                  </td>
                   <td className="hidden px-3 py-3 sm:table-cell">
                     {s.guardian_phone}
                   </td>
@@ -84,7 +110,7 @@ export function StudentDirectory({ students }: { students: Row[] }) {
               ))}
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-3 py-6 text-[#5a6f65]">
+                  <td colSpan={5} className="px-3 py-6 text-[#5a6f65]">
                     No students match.
                   </td>
                 </tr>

@@ -8,7 +8,7 @@ import { StudentSearchSelect } from "@/components/students/student-search-select
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, formatPendingMonths } from "@/lib/format";
 
 type Student = { id: string; full_name: string; admission_no: string };
 type Due = {
@@ -71,7 +71,7 @@ export function RecordPaymentForm({
             else toast.error(result.error);
             return;
           }
-          const success = `Payment successful — ${formatMoney(amount)} for ${studentName} submitted for accountant review.`;
+          const success = `Payment successful — ${formatMoney(amount)} for ${studentName} submitted for admin review.`;
           setOk(true);
           setMessage(success);
           if (onSuccess) onSuccess(success);
@@ -95,12 +95,15 @@ export function RecordPaymentForm({
           className="h-10 w-full rounded-lg border border-input bg-background px-2 text-sm md:h-9"
         >
           <option value="">None</option>
-          {studentDues.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.due_month}/{d.due_year} · balance{" "}
-              {(Number(d.total_due) - Number(d.amount_paid)).toFixed(2)}
-            </option>
-          ))}
+          {studentDues.map((d) => {
+            const bal = Number(d.total_due) - Number(d.amount_paid);
+            return (
+              <option key={d.id} value={d.id}>
+                {d.due_month}/{d.due_year} · balance {formatMoney(bal)} (
+                {formatPendingMonths(bal)})
+              </option>
+            );
+          })}
         </select>
       </div>
       <div className="space-y-1">

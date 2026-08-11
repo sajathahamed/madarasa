@@ -8,7 +8,7 @@ export default async function ClassesPage() {
 
   let classesQ = supabase
     .from("classes")
-    .select("id, name, schedule_note, branch_id")
+    .select("id, name, section, grade, schedule_note, branch_id")
     .eq("is_active", true)
     .order("name");
   let studentsQ = supabase

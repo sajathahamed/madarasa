@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
+import { enrollStudentAction } from "@/actions/attendance";
 import {
   changeFeePlanAction,
   updateStudentAction,
@@ -18,7 +19,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatMoney, formatDate } from "@/lib/format";
+import { StatusBadge } from "@/components/ui/status-badge";
+import {
+  classDisplayName,
+  sectionBadgeValue,
+} from "@/lib/academic-sections";
+import { formatMoney, formatDate, formatPendingMonths } from "@/lib/format";
+import type { AcademicSection } from "@/types/database";
 
 type Student = {
   id: string;
@@ -68,6 +75,13 @@ type Payment = {
   created_at: string;
 };
 
+type ClassOption = {
+  id: string;
+  name: string;
+  section: AcademicSection | null;
+  grade: number | null;
+};
+
 export function StudentProfileClient({
   student,
   health,
@@ -75,6 +89,9 @@ export function StudentProfileClient({
   dues,
   payments,
   canEdit,
+  canManageEnrollment = false,
+  classes = [],
+  currentClassId = null,
 }: {
   student: Student;
   health: Health;
@@ -82,16 +99,95 @@ export function StudentProfileClient({
   dues: Due[];
   payments: Payment[];
   canEdit: boolean;
+  canManageEnrollment?: boolean;
+  classes?: ClassOption[];
+  currentClassId?: string | null;
 }) {
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
   const [parentLink, setParentLink] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [isFree, setIsFree] = useState(feePlan?.is_free ?? false);
+  const [classId, setClassId] = useState(currentClassId ?? "");
+
+  const currentClass = classes.find((c) => c.id === (currentClassId ?? "")) ?? null;
 
   return (
     <div className="space-y-6">
       {message ? <p className="text-sm text-[#0b3d2e]">{message}</p> : null}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Section</CardTitle>
+          <CardDescription>
+            Hifz or Sariya grade 1–7 (one active class).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {currentClass ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusBadge value={sectionBadgeValue(currentClass.section)} />
+              <span className="text-sm text-[#0b3d2e]">
+                {classDisplayName(
+                  currentClass.section,
+                  currentClass.grade,
+                  currentClass.name,
+                )}
+              </span>
+            </div>
+          ) : (
+            <p className="text-sm text-[#5a6f65]">No section assigned.</p>
+          )}
+          {canManageEnrollment ? (
+            <form
+              className="flex flex-col gap-2 sm:flex-row sm:items-end"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!classId) return;
+                startTransition(async () => {
+                  const result = await enrollStudentAction({
+                    class_id: classId,
+                    student_id: student.id,
+                  });
+                  setMessage(result.error ? result.error : "Section updated");
+                  if (!result.error) router.refresh();
+                });
+              }}
+            >
+              <div className="w-full space-y-1 sm:flex-1">
+                <Label htmlFor="class_id">Assign section</Label>
+                <select
+                  id="class_id"
+                  className="h-10 w-full rounded-lg border border-input bg-background px-2 md:h-9"
+                  value={classId}
+                  onChange={(e) => setClassId(e.target.value)}
+                  required
+                >
+                  <option value="" disabled>
+                    Select Hifz or Sariya 1–7
+                  </option>
+                  {classes
+                    .filter((c) => c.section === "hifz" || c.section === "sariya")
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {classDisplayName(c.section, c.grade, c.name)}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <Button
+                type="submit"
+                pending={pending}
+                pendingLabel="Saving…"
+                disabled={pending || !classId}
+                className="bg-[#0b3d2e]"
+              >
+                Save section
+              </Button>
+            </form>
+          ) : null}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -370,23 +466,35 @@ export function StudentProfileClient({
           <div>
             <h3 className="mb-2 text-sm font-medium">Outstanding dues</h3>
             <ul className="space-y-2 text-sm">
-              {dues.map((d) => (
-                <li
-                  key={d.id}
-                  className="flex flex-wrap items-start justify-between gap-2 rounded-lg border border-[#0b3d2e]/10 px-3 py-2"
-                >
-                  <span>
-                    {d.due_month}/{d.due_year} · {d.status}
-                    {d.carried_forward
-                      ? ` · carried ${formatMoney(d.carried_forward)}`
-                      : ""}
-                  </span>
-                  <span>
-                    {formatMoney(Number(d.amount_paid))} /{" "}
-                    {formatMoney(Number(d.total_due))}
-                  </span>
-                </li>
-              ))}
+              {dues.map((d) => {
+                const bal = Number(d.total_due) - Number(d.amount_paid);
+                return (
+                  <li
+                    key={d.id}
+                    className="flex flex-wrap items-start justify-between gap-2 rounded-lg border border-[#0b3d2e]/10 px-3 py-2"
+                  >
+                    <span>
+                      {d.due_month}/{d.due_year} · {d.status}
+                      {d.carried_forward
+                        ? ` · carried ${formatMoney(d.carried_forward)}`
+                        : ""}
+                      {bal > 0 ? (
+                        <>
+                          {" "}
+                          ·{" "}
+                          <span className="font-medium text-[#0b3d2e]">
+                            {formatPendingMonths(bal)}
+                          </span>
+                        </>
+                      ) : null}
+                    </span>
+                    <span>
+                      {formatMoney(Number(d.amount_paid))} /{" "}
+                      {formatMoney(Number(d.total_due))}
+                    </span>
+                  </li>
+                );
+              })}
               {dues.length === 0 ? (
                 <li className="text-[#5a6f65]">No dues yet.</li>
               ) : null}

@@ -17,6 +17,7 @@ export type AttendanceStatus = "present" | "absent" | "late";
 export type IslamicStream = "qaida" | "nazirah" | "hifz";
 export type HifzComponent = "sabaq" | "sabqi" | "manzil" | "juz";
 export type StudentStatus = "active" | "left" | "graduated";
+export type AcademicSection = "hifz" | "sariya";
 
 export type Json =
   | string
@@ -592,6 +593,8 @@ type Tables = {
       branch_id: string;
       academic_year_id: string | null;
       name: string;
+      section: AcademicSection | null;
+      grade: number | null;
       teacher_id: string | null;
       schedule_note: string | null;
       is_active: boolean;
@@ -603,6 +606,8 @@ type Tables = {
       branch_id: string;
       academic_year_id?: string | null;
       name: string;
+      section?: AcademicSection | null;
+      grade?: number | null;
       teacher_id?: string | null;
       schedule_note?: string | null;
       is_active?: boolean;
@@ -614,6 +619,8 @@ type Tables = {
       branch_id?: string;
       academic_year_id?: string | null;
       name?: string;
+      section?: AcademicSection | null;
+      grade?: number | null;
       teacher_id?: string | null;
       schedule_note?: string | null;
       is_active?: boolean;
@@ -792,6 +799,120 @@ type Tables = {
     };
     Relationships: [];
   };
+  library_book_types: {
+    Row: {
+      id: string;
+      vendor_id: string;
+      branch_id: string;
+      name: string;
+      created_by: string | null;
+      created_at: string;
+    };
+    Insert: {
+      id?: string;
+      vendor_id: string;
+      branch_id: string;
+      name: string;
+      created_by?: string | null;
+      created_at?: string;
+    };
+    Update: {
+      id?: string;
+      vendor_id?: string;
+      branch_id?: string;
+      name?: string;
+      created_by?: string | null;
+      created_at?: string;
+    };
+    Relationships: [];
+  };
+  library_books: {
+    Row: {
+      id: string;
+      vendor_id: string;
+      branch_id: string;
+      title: string;
+      qitab_id: string;
+      author: string | null;
+      type_id: string | null;
+      copies_total: number;
+      notes: string | null;
+      is_active: boolean;
+      created_by: string | null;
+      created_at: string;
+    };
+    Insert: {
+      id?: string;
+      vendor_id: string;
+      branch_id: string;
+      title: string;
+      qitab_id: string;
+      author?: string | null;
+      type_id?: string | null;
+      copies_total?: number;
+      notes?: string | null;
+      is_active?: boolean;
+      created_by?: string | null;
+      created_at?: string;
+    };
+    Update: {
+      id?: string;
+      vendor_id?: string;
+      branch_id?: string;
+      title?: string;
+      qitab_id?: string;
+      author?: string | null;
+      type_id?: string | null;
+      copies_total?: number;
+      notes?: string | null;
+      is_active?: boolean;
+      created_by?: string | null;
+      created_at?: string;
+    };
+    Relationships: [];
+  };
+  library_loans: {
+    Row: {
+      id: string;
+      vendor_id: string;
+      branch_id: string;
+      book_id: string;
+      student_id: string;
+      borrowed_at: string;
+      due_at: string | null;
+      returned_at: string | null;
+      borrowed_by: string | null;
+      notes: string | null;
+      created_at: string;
+    };
+    Insert: {
+      id?: string;
+      vendor_id: string;
+      branch_id: string;
+      book_id: string;
+      student_id: string;
+      borrowed_at?: string;
+      due_at?: string | null;
+      returned_at?: string | null;
+      borrowed_by?: string | null;
+      notes?: string | null;
+      created_at?: string;
+    };
+    Update: {
+      id?: string;
+      vendor_id?: string;
+      branch_id?: string;
+      book_id?: string;
+      student_id?: string;
+      borrowed_at?: string;
+      due_at?: string | null;
+      returned_at?: string | null;
+      borrowed_by?: string | null;
+      notes?: string | null;
+      created_at?: string;
+    };
+    Relationships: [];
+  };
 };
 
 export type Database = {
@@ -823,3 +944,6 @@ export type Donation = Tables["donations"]["Row"];
 export type SchoolClass = Tables["classes"]["Row"];
 export type FeeDue = Tables["fee_dues"]["Row"];
 export type IslamicProgressLog = Tables["islamic_progress_logs"]["Row"];
+export type LibraryBook = Tables["library_books"]["Row"];
+export type LibraryBookType = Tables["library_book_types"]["Row"];
+export type LibraryLoan = Tables["library_loans"]["Row"];

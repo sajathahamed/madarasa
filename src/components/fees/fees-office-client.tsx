@@ -20,7 +20,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, formatPendingMonths } from "@/lib/format";
 import { openWhatsAppLinks } from "@/lib/open-whatsapp";
 import { matchesStudentQuery } from "@/lib/student-search";
 
@@ -292,7 +292,7 @@ export function FeesOfficeClient({
             <CardHeader>
               <CardTitle>Record payment</CardTitle>
               <CardDescription>
-                Submit for accountant review. You will see a clear success
+                Submit for admin review. You will see a clear success
                 message after saving.
               </CardDescription>
             </CardHeader>
@@ -377,7 +377,10 @@ export function FeesOfficeClient({
                           {d.carried_forward
                             ? ` · carried ${formatMoney(d.carried_forward)}`
                             : ""}{" "}
-                          · due {formatMoney(bal)}
+                          · due {formatMoney(bal)} ·{" "}
+                          <span className="font-medium text-[#0b3d2e]">
+                            {formatPendingMonths(bal)}
+                          </span>
                         </p>
                       </div>
                     </div>

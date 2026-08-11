@@ -11,13 +11,21 @@ import { Label } from "@/components/ui/label";
 type VendorOption = { id: string; name: string };
 type BranchOption = { id: string; name: string; vendor_id: string };
 
-const ROLES = [
-  "super_admin",
-  "vendor_admin",
-  "data_entry",
-  "accountant",
-  "principal",
+/** Platform can still create legacy roles; vendor staff UI is Admin + Data entry. */
+const PLATFORM_ROLES = [
+  { value: "super_admin", label: "Platform admin" },
+  { value: "vendor_admin", label: "Admin" },
+  { value: "data_entry", label: "Data entry" },
+  { value: "accountant", label: "Accountant (legacy)" },
+  { value: "principal", label: "Principal (legacy)" },
 ] as const;
+
+const VENDOR_STAFF_ROLES = [
+  { value: "vendor_admin", label: "Admin" },
+  { value: "data_entry", label: "Data entry" },
+] as const;
+
+type RoleValue = (typeof PLATFORM_ROLES)[number]["value"];
 
 export function CreateUserForm({
   vendors,
@@ -31,11 +39,18 @@ export function CreateUserForm({
   lockVendorId?: string;
 }) {
   const router = useRouter();
-  const roleOptions = allowSuperAdmin
-    ? ROLES
-    : ROLES.filter((r) => r !== "super_admin");
-  const [role, setRole] = useState<(typeof ROLES)[number]>(
-    allowSuperAdmin ? "vendor_admin" : "data_entry",
+  const vendorScoped = !!lockVendorId || !allowSuperAdmin;
+  const roleOptions = vendorScoped
+    ? VENDOR_STAFF_ROLES
+    : allowSuperAdmin
+      ? PLATFORM_ROLES
+      : PLATFORM_ROLES.filter((r) => r.value !== "super_admin");
+  const [role, setRole] = useState<RoleValue>(
+    vendorScoped
+      ? "data_entry"
+      : allowSuperAdmin
+        ? "vendor_admin"
+        : "data_entry",
   );
   const [vendorId, setVendorId] = useState(lockVendorId ?? "");
   const [message, setMessage] = useState<string | null>(null);
@@ -104,12 +119,12 @@ export function CreateUserForm({
           id="role"
           name="role"
           value={role}
-          onChange={(e) => setRole(e.target.value as (typeof ROLES)[number])}
+          onChange={(e) => setRole(e.target.value as RoleValue)}
           className="h-10 w-full rounded-lg border border-input bg-background px-2 text-sm md:h-9"
         >
           {roleOptions.map((r) => (
-            <option key={r} value={r}>
-              {r}
+            <option key={r.value} value={r.value}>
+              {r.label}
             </option>
           ))}
         </select>

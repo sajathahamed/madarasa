@@ -3,6 +3,8 @@ import type { AppUser } from "@/types/database";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
+export { roleLabel } from "@/lib/auth/roles";
+
 export type AuthOk = {
   supabase: SupabaseClient<Database>;
   user: User;
@@ -32,7 +34,7 @@ export function canEnterData(role: string) {
   return ["super_admin", "vendor_admin", "data_entry"].includes(role);
 }
 
-/** Profile + fee plan edits (ops staff including accountant/principal). */
+/** Profile + fee plan edits (ops staff including legacy accountant/principal). */
 export function canEditStudent(role: string) {
   return [
     "super_admin",
@@ -46,6 +48,13 @@ export function canEditStudent(role: string) {
 /** Separate admin dashboard: delete / void operational records. */
 export function canManageAdminOps(role: string) {
   return ["super_admin", "vendor_admin", "principal"].includes(role);
+}
+
+/** Approve / reject payments & donations (full admin oversight). */
+export function canApproveMoney(role: string) {
+  return ["super_admin", "vendor_admin", "accountant", "principal"].includes(
+    role,
+  );
 }
 
 export function canMarkAttendance(role: string) {
@@ -64,47 +73,101 @@ export function canManageClasses(role: string) {
   );
 }
 
+/** Library (kutub) catalog + loans — same ops roles as classes. */
+export function canManageLibrary(role: string) {
+  return canManageClasses(role);
+}
+
 export function canLogProgress(role: string) {
   return ["super_admin", "vendor_admin", "principal", "data_entry"].includes(
     role,
   );
 }
 
-export function opsNav(profile: AppUser) {
-  const isMoneyRole = ["accountant", "principal", "vendor_admin", "super_admin"].includes(
-    profile.role,
-  );
+/** Custom SMS compose page (Dialog / Upview Tech mask). */
+export function canSendSms(role: string) {
+  return [
+    "super_admin",
+    "vendor_admin",
+    "data_entry",
+    "accountant",
+    "principal",
+  ].includes(role);
+}
 
+export function opsNav(profile: AppUser) {
+  const canApprove = canApproveMoney(profile.role);
+  const smsLink = canSendSms(profile.role)
+    ? [{ href: "/branch/sms", label: "Send SMS" }]
+    : [];
+
+  // Vendor staff: Admin (vendor_admin) and Data entry only for day-to-day.
+  if (profile.role === "vendor_admin") {
+    return [
+      { href: "/vendor", label: "Vendor overview" },
+      { href: "/branch", label: "Overview" },
+      { href: "/branch/accountant", label: "Approvals desk" },
+      { href: "/branch/students", label: "Students" },
+      { href: "/branch/fees", label: "Fees" },
+      { href: "/branch/approvals", label: "Approvals" },
+      { href: "/branch/donations", label: "Donations" },
+      { href: "/branch/classes", label: "Classes" },
+      { href: "/branch/library", label: "Library" },
+      { href: "/branch/attendance", label: "Attendance" },
+      { href: "/branch/progress", label: "Progress" },
+      ...smsLink,
+      { href: "/branch/reports", label: "Reports" },
+      { href: "/branch/admin", label: "Admin delete" },
+    ];
+  }
+
+  if (profile.role === "data_entry") {
+    return [
+      { href: "/branch", label: "Overview" },
+      { href: "/branch/students", label: "Students" },
+      { href: "/branch/fees", label: "Fees" },
+      { href: "/branch/approvals", label: "My submissions" },
+      { href: "/branch/donations", label: "Donations" },
+      { href: "/branch/classes", label: "Classes" },
+      { href: "/branch/library", label: "Library" },
+      { href: "/branch/attendance", label: "Attendance" },
+      { href: "/branch/progress", label: "Progress" },
+      ...smsLink,
+      { href: "/branch/reports", label: "Reports" },
+    ];
+  }
+
+  // Legacy accountant / principal / platform
   const items =
     profile.role === "accountant"
       ? [
-          { href: "/branch/accountant", label: "Accountant desk" },
+          { href: "/branch/accountant", label: "Approvals desk" },
           { href: "/branch/fees", label: "Record payment" },
           { href: "/branch/approvals", label: "All approvals" },
           { href: "/branch/students", label: "Students" },
+          ...smsLink,
           { href: "/branch/reports", label: "Reports" },
           { href: "/branch", label: "Overview" },
         ]
       : [
           { href: "/branch", label: "Overview" },
-          ...(isMoneyRole
-            ? [{ href: "/branch/accountant", label: "Accountant desk" }]
+          ...(canApprove
+            ? [{ href: "/branch/accountant", label: "Approvals desk" }]
             : []),
           { href: "/branch/students", label: "Students" },
           { href: "/branch/fees", label: "Fees" },
           { href: "/branch/approvals", label: "Approvals" },
           { href: "/branch/donations", label: "Donations" },
           { href: "/branch/classes", label: "Classes" },
+          { href: "/branch/library", label: "Library" },
           { href: "/branch/attendance", label: "Attendance" },
           { href: "/branch/progress", label: "Progress" },
+          ...smsLink,
           { href: "/branch/reports", label: "Reports" },
         ];
 
   if (canManageAdminOps(profile.role)) {
-    items.push({ href: "/branch/admin", label: "Admin" });
-  }
-  if (profile.role === "vendor_admin") {
-    items.push({ href: "/vendor", label: "Vendor" });
+    items.push({ href: "/branch/admin", label: "Admin delete" });
   }
   if (profile.role === "super_admin") {
     items.push({ href: "/super-admin", label: "Platform" });

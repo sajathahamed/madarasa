@@ -25,6 +25,7 @@ const studentSchema = z.object({
   emergency_contact_name: z.string().optional(),
   emergency_contact_phone: z.string().optional(),
   notes: z.string().optional(),
+  class_id: z.string().uuid().optional(),
 });
 
 export async function createStudentAction(input: z.infer<typeof studentSchema>) {
@@ -41,6 +42,21 @@ export async function createStudentAction(input: z.infer<typeof studentSchema>) 
       return {
         error: parsed.error.issues.map((i) => i.message).join("; "),
       };
+    }
+
+    if (parsed.data.class_id) {
+      const { data: klass } = await auth.supabase
+        .from("classes")
+        .select("id, vendor_id, branch_id, section")
+        .eq("id", parsed.data.class_id)
+        .maybeSingle();
+      if (!klass) return { error: "Class not found" };
+      if (klass.vendor_id !== parsed.data.vendor_id) {
+        return { error: "Class vendor mismatch" };
+      }
+      if (!klass.section) {
+        return { error: "Pick Hifz or Sariya 1–7" };
+      }
     }
 
     const { data: student, error } = await auth.supabase
@@ -90,6 +106,22 @@ export async function createStudentAction(input: z.infer<typeof studentSchema>) 
         error:
           healthError?.message ?? planError?.message ?? "Related insert failed",
       };
+    }
+
+    if (parsed.data.class_id) {
+      const { error: enrollError } = await auth.supabase
+        .from("class_enrollments")
+        .insert({
+          class_id: parsed.data.class_id,
+          student_id: student.id,
+          is_active: true,
+        });
+      if (enrollError) {
+        return {
+          data: student,
+          error: `Student created but enrollment failed: ${enrollError.message}`,
+        };
+      }
     }
 
     return { data: student };
@@ -220,81 +252,107 @@ export async function reviewTransactionAction(
       return { error: parsed.error.issues.map((i) => i.message).join("; ") };
     }
 
-    const table = parsed.data.kind === "payment" ? "payments" : "donations";
-    const { data: row } = await auth.supabase
+    const decision = parsed.data;
+    const { supabase, user, profile } = auth;
+    const table = decision.kind === "payment" ? "payments" : "donations";
+    const { data: row } = await supabase
       .from(table)
       .select("*")
-      .eq("id", parsed.data.id)
+      .eq("id", decision.id)
       .maybeSingle();
 
     if (!row) return { error: "Record not found" };
 
     const now = new Date().toISOString();
-    const canActAsAccountant =
-      auth.profile.role === "accountant" ||
-      auth.profile.role === "vendor_admin" ||
-      auth.profile.role === "super_admin";
-    const canActAsPrincipal =
-      auth.profile.role === "principal" ||
-      auth.profile.role === "vendor_admin" ||
-      auth.profile.role === "super_admin";
+    const isFullApprover =
+      profile.role === "vendor_admin" || profile.role === "super_admin";
+    const canActAsAccountant = profile.role === "accountant" || isFullApprover;
+    const canActAsPrincipal = profile.role === "principal" || isFullApprover;
 
-    if (canActAsAccountant && row.status === "pending_accountant") {
+    async function notifyPaymentApproved() {
+      if (
+        decision.kind !== "payment" ||
+        process.env.PAYMENT_CONFIRM_ON_APPROVAL_ONLY === "false"
+      ) {
+        return;
+      }
+      const { data: student } = await supabase
+        .from("students")
+        .select("full_name, guardian_phone, vendor_id, id")
+        .eq("id", (row as { student_id: string }).student_id)
+        .maybeSingle();
+
+      if (!student?.guardian_phone) return;
+      try {
+        const { notifyPaymentConfirmation } = await import("@/lib/notify");
+        await notifyPaymentConfirmation({
+          to: student.guardian_phone,
+          studentName: student.full_name,
+          amount: String((row as { amount: number }).amount),
+          vendorId: student.vendor_id,
+          studentId: student.id,
+        });
+      } catch (waErr) {
+        console.error("[payment notify]", waErr);
+      }
+    }
+
+    // Admin can fully approve in one step (accountant + principal stages).
+    if (isFullApprover && row.status === "pending_accountant") {
       const nextStatus: ApprovalStatus =
-        parsed.data.decision === "approve" ? "pending_principal" : "rejected";
-      const { error } = await auth.supabase
+        decision.decision === "approve" ? "approved" : "rejected";
+      const { error } = await supabase
         .from(table)
         .update({
           status: nextStatus,
-          accountant_id: auth.user.id,
+          accountant_id: user.id,
           accountant_action_at: now,
-          accountant_remarks: parsed.data.remarks || null,
+          accountant_remarks: decision.remarks || null,
+          ...(decision.decision === "approve"
+            ? {
+                principal_id: user.id,
+                principal_action_at: now,
+                principal_remarks: decision.remarks || null,
+              }
+            : {}),
         })
-        .eq("id", parsed.data.id);
+        .eq("id", decision.id);
+      if (error) return { error: error.message };
+      if (nextStatus === "approved") await notifyPaymentApproved();
+      return { data: { status: nextStatus } };
+    }
+
+    if (canActAsAccountant && row.status === "pending_accountant") {
+      const nextStatus: ApprovalStatus =
+        decision.decision === "approve" ? "pending_principal" : "rejected";
+      const { error } = await supabase
+        .from(table)
+        .update({
+          status: nextStatus,
+          accountant_id: user.id,
+          accountant_action_at: now,
+          accountant_remarks: decision.remarks || null,
+        })
+        .eq("id", decision.id);
       if (error) return { error: error.message };
       return { data: { status: nextStatus } };
     }
 
     if (canActAsPrincipal && row.status === "pending_principal") {
       const nextStatus: ApprovalStatus =
-        parsed.data.decision === "approve" ? "approved" : "rejected";
-      const { error } = await auth.supabase
+        decision.decision === "approve" ? "approved" : "rejected";
+      const { error } = await supabase
         .from(table)
         .update({
           status: nextStatus,
-          principal_id: auth.user.id,
+          principal_id: user.id,
           principal_action_at: now,
-          principal_remarks: parsed.data.remarks || null,
+          principal_remarks: decision.remarks || null,
         })
-        .eq("id", parsed.data.id);
+        .eq("id", decision.id);
       if (error) return { error: error.message };
 
-      if (
-        nextStatus === "approved" &&
-        parsed.data.kind === "payment" &&
-        process.env.PAYMENT_CONFIRM_ON_APPROVAL_ONLY !== "false"
-      ) {
-        const { data: student } = await auth.supabase
-          .from("students")
-          .select("full_name, guardian_phone, vendor_id, id")
-          .eq("id", (row as { student_id: string }).student_id)
-          .maybeSingle();
-
-        if (student?.guardian_phone) {
-          try {
-            const { notifyPaymentConfirmation } = await import("@/lib/notify");
-            await notifyPaymentConfirmation({
-              to: student.guardian_phone,
-              studentName: student.full_name,
-              amount: String((row as { amount: number }).amount),
-              vendorId: student.vendor_id,
-              studentId: student.id,
-            });
-          } catch (waErr) {
-            console.error("[payment notify]", waErr);
-          }
-        }
-      }
+      if (nextStatus === "approved") await notifyPaymentApproved();
 
       return { data: { status: nextStatus } };
     }

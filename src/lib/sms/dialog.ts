@@ -33,12 +33,22 @@ function toTelAddress(phone: string) {
   return `tel:${normalizePhone(phone)}`;
 }
 
+/** Approved Dialog Rich Communication mask (matches working PHP Send_msg). */
+const UPVIEW_TECH_MASK = "Upview Tech";
+
 function maskName() {
-  return (
+  const fromEnv = (
     process.env.DIALOG_SMS_MASK ||
     process.env.DIALOG_SMS_SENDER ||
-    "Upview Tech"
+    UPVIEW_TECH_MASK
   ).trim();
+  // Rich Communication account requires this exact registered mask.
+  return fromEnv || UPVIEW_TECH_MASK;
+}
+
+/** Public mask label for UI (always Upview Tech for this integration). */
+export function dialogSmsMask() {
+  return UPVIEW_TECH_MASK;
 }
 
 function richCommCredentials() {
@@ -67,7 +77,7 @@ async function logSms(opts: {
     provider_response: {
       channel: "dialog_sms",
       mode: smsMode(),
-      mask: maskName(),
+      mask: UPVIEW_TECH_MASK,
       body: opts.body,
       result: opts.response,
     } as never,
@@ -133,14 +143,15 @@ async function sendViaRichCommunication(
     .replace(" ", "T");
 
   const digest = createHash("md5").update(password).digest("hex");
+  // Contract mirrors working PHP Send_msg(): USER/DIGEST/CREATED + messages[]
   const requestData = {
     messages: [
       {
-        clientRef: process.env.DIALOG_SMS_CLIENT_REF || "Madarasa",
+        clientRef: process.env.DIALOG_SMS_CLIENT_REF || "RPOSbyUpview",
         number: normalized.join(","),
-        mask: maskName(),
+        mask: UPVIEW_TECH_MASK,
         text: message,
-        campaignName: process.env.DIALOG_SMS_CAMPAIGN || "madarasa",
+        campaignName: process.env.DIALOG_SMS_CAMPAIGN || "restsaaspos",
       },
     ],
   };
@@ -164,28 +175,18 @@ async function sendViaRichCommunication(
     json = { raw };
   }
 
-  const resultDesc = String(json?.resultDesc ?? json?.result ?? "");
-  const resultCode = json?.resultCode;
-  const nestedOk = Array.isArray(json?.messages)
-    ? (json.messages as { resultDesc?: string; resultCode?: number }[]).some(
-        (m) =>
-          String(m.resultDesc ?? "").toUpperCase() === "SUCCESS" ||
-          m.resultCode === 0,
-      )
-    : false;
-  const ok =
-    res.ok &&
-    (resultDesc.toUpperCase() === "SUCCESS" ||
-      resultCode === 0 ||
-      String(resultCode ?? "") === "0" ||
-      nestedOk);
+  // PHP success: resultDesc == 'SUCCESS'
+  const resultDesc = String(json?.resultDesc ?? "");
+  const ok = resultDesc === "SUCCESS";
 
   return {
     ok,
     response: json,
     error: ok
       ? undefined
-      : resultDesc || JSON.stringify(json ?? { status: res.status }),
+      : resultDesc ||
+        String(json?.result ?? "") ||
+        JSON.stringify(json ?? { status: res.status }),
   };
 }
 

@@ -1,9 +1,15 @@
 /**
- * Import Monthly Fee mangent.xlsx into vendor "eravur markaz" / branch "main".
+ * Wipe eravur markaz student/fee data and re-import from
+ * "Monthly Fee mangent EDIT.xlsx".
+ *
+ * Amount source: column "Total pending" (already includes August).
+ * pendingMonths = totalPending / 12000 (display; money stays exact).
+ * fee_dues: total_due = totalPending, month_amount = 12000,
+ *           carried_forward = max(0, totalPending - 12000).
  *
  * Usage:
  *   npx tsx scripts/import-markas-excel.ts --dry-run
- *   npx tsx scripts/import-markas-excel.ts
+ *   npx tsx scripts/import-markas-excel.ts --wipe
  */
 import { existsSync } from "fs";
 import { join } from "path";
@@ -20,7 +26,10 @@ const DUE_MONTH = 8;
 const DUE_YEAR = 2026;
 const DEFAULT_PHONE = "00000000";
 const DEFAULT_GUARDIAN = "Guardian";
-const EXCEL_PATH = join(process.cwd(), "Monthly Fee mangent.xlsx");
+const EXCEL_CANDIDATES = [
+  "Monthly Fee mangent EDIT.xlsx",
+  "Monthly Fee mangent.xlsx",
+];
 
 type ParsedRow = {
   excelIndex: string;
@@ -30,18 +39,34 @@ type ParsedRow = {
   className: string;
   address: string | null;
   phone: string;
-  balance: number;
+  totalPending: number;
+  /** Derived: totalPending / MONTHLY_AMOUNT (may be fractional). */
+  pendingMonths: number;
+  /** Optional Excel "Pending Months" col for cross-check only. */
+  excelPendingMonths: number | null;
   status: "active" | "left";
   remappedFrom?: string;
 };
 
-function classNameFromGrade(grade: string | number): string {
-  if (typeof grade === "string" && grade.trim().toLowerCase() === "hifz") {
-    return "Hifz";
+function resolveExcelPath(): string {
+  for (const name of EXCEL_CANDIDATES) {
+    const p = join(process.cwd(), name);
+    if (existsSync(p)) return p;
   }
-  const n = Number(grade);
-  if (!Number.isNaN(n) && n >= 1 && n <= 6) return `Grade ${n}`;
-  return `Grade ${String(grade).trim()}`;
+  throw new Error(
+    `Excel not found. Tried: ${EXCEL_CANDIDATES.join(", ")}`,
+  );
+}
+
+function classNameFromGrade(grade: string | number): string {
+  const raw = String(grade ?? "").trim();
+  if (!raw) return "Unassigned";
+  const lower = raw.toLowerCase();
+  if (lower === "hifz") return "Hifz";
+  if (lower === "inaam") return "Inaam";
+  const n = Number(raw);
+  if (!Number.isNaN(n) && n >= 1 && n <= 7) return `Sariya ${n}`;
+  return raw;
 }
 
 function parsePhone(raw: unknown): string {
@@ -51,25 +76,31 @@ function parsePhone(raw: unknown): string {
   return digits;
 }
 
-function parseBalance(raw: unknown): {
-  balance: number;
-  status: "active" | "left";
-} {
-  if (raw == null || raw === "") return { balance: 0, status: "active" };
-  if (typeof raw === "string" && raw.toLowerCase().includes("left")) {
-    return { balance: 0, status: "left" };
-  }
-  const n = Number(raw);
-  if (Number.isNaN(n)) return { balance: 0, status: "active" };
-  return { balance: n, status: "active" };
+function isLeftMarker(raw: unknown): boolean {
+  return typeof raw === "string" && raw.trim().toLowerCase() === "left";
 }
 
-function loadExcel(): ParsedRow[] {
-  if (!existsSync(EXCEL_PATH)) {
-    throw new Error(`Excel not found: ${EXCEL_PATH}`);
+function parseMoney(raw: unknown): number | null {
+  if (raw == null || raw === "") return null;
+  if (typeof raw === "string") {
+    if (isLeftMarker(raw)) return null;
+    const cleaned = raw.replace(/,/g, "").trim();
+    if (!cleaned) return null;
+    const n = Number(cleaned);
+    return Number.isNaN(n) ? null : n;
   }
-  const wb = XLSX.readFile(EXCEL_PATH);
-  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const n = Number(raw);
+  return Number.isNaN(n) ? null : n;
+}
+
+function monthsFromPending(totalPending: number): number {
+  if (totalPending <= 0) return 0;
+  return Math.round((totalPending / MONTHLY_AMOUNT) * 100) / 100;
+}
+
+function loadExcel(path: string): ParsedRow[] {
+  const wb = XLSX.readFile(path);
+  const sheet = wb.Sheets[wb.SheetNames[0]!];
   const rows = XLSX.utils.sheet_to_json<(string | number | null)[]>(sheet, {
     header: 1,
     defval: null,
@@ -103,7 +134,24 @@ function loadExcel(): ParsedRow[] {
     const remapped = count > 1;
     const admissionNo = remapped ? `${excelIndex}-${count}` : excelIndex;
 
-    const { balance, status } = parseBalance(row[6]);
+    // New sheet columns:
+    // 6 Pending Months, 7 BALANCE ON 30.07, 8 August, 9 Total pending, 10 Aug payment, 11 Balance
+    const left =
+      isLeftMarker(row[6]) ||
+      isLeftMarker(row[7]) ||
+      isLeftMarker(row[9]) ||
+      isLeftMarker(row[11]);
+
+    const totalPendingRaw =
+      parseMoney(row[9]) ??
+      parseMoney(row[11]) ??
+      (parseMoney(row[7]) != null && parseMoney(row[8]) != null
+        ? (parseMoney(row[7]) as number) + (parseMoney(row[8]) as number)
+        : null) ??
+      0;
+    const totalPending = left ? 0 : Math.max(0, totalPendingRaw);
+    const excelPendingMonths = left ? null : parseMoney(row[6]);
+
     const gradeRaw = (row[3] ?? "") as string | number;
 
     out.push({
@@ -112,10 +160,13 @@ function loadExcel(): ParsedRow[] {
       fullName,
       gradeRaw,
       className: classNameFromGrade(gradeRaw),
-      address: row[4] != null && String(row[4]).trim() ? String(row[4]).trim() : null,
+      address:
+        row[4] != null && String(row[4]).trim() ? String(row[4]).trim() : null,
       phone: parsePhone(row[5]),
-      balance,
-      status,
+      totalPending,
+      pendingMonths: monthsFromPending(totalPending),
+      excelPendingMonths,
+      status: left ? "left" : "active",
       remappedFrom: remapped ? excelIndex : undefined,
     });
   }
@@ -123,32 +174,151 @@ function loadExcel(): ParsedRow[] {
   return out;
 }
 
+async function wipeVendorBranch(
+  client: pg.Client,
+  vendorId: string,
+  branchId: string,
+) {
+  console.log("Wiping existing markaz/main operational data…");
+
+  // Ledger for payments/donations of this branch
+  await client.query(
+    `delete from public.ledger_entries
+     where vendor_id = $1 and branch_id = $2`,
+    [vendorId, branchId],
+  );
+
+  await client.query(
+    `delete from public.payments where vendor_id = $1 and branch_id = $2`,
+    [vendorId, branchId],
+  );
+  await client.query(
+    `delete from public.donations where vendor_id = $1 and branch_id = $2`,
+    [vendorId, branchId],
+  );
+
+  await client.query(
+    `delete from public.fee_dues where vendor_id = $1 and branch_id = $2`,
+    [vendorId, branchId],
+  );
+
+  await client.query(
+    `delete from public.class_enrollments
+     where class_id in (select id from public.classes where branch_id = $1)`,
+    [branchId],
+  );
+
+  await client.query(
+    `delete from public.attendance_sessions
+     where vendor_id = $1 and branch_id = $2`,
+    [vendorId, branchId],
+  );
+
+  await client.query(
+    `delete from public.islamic_progress_logs
+     where vendor_id = $1 and branch_id = $2`,
+    [vendorId, branchId],
+  );
+
+  await client.query(
+    `delete from public.parent_access_tokens
+     where student_id in (
+       select id from public.students where vendor_id = $1 and branch_id = $2
+     )`,
+    [vendorId, branchId],
+  );
+
+  await client.query(
+    `delete from public.whatsapp_messages
+     where vendor_id = $1
+       and (student_id is null or student_id in (
+         select id from public.students where vendor_id = $1 and branch_id = $2
+       ))`,
+    [vendorId, branchId],
+  );
+
+  await client.query(
+    `delete from public.student_fee_plans
+     where student_id in (
+       select id from public.students where vendor_id = $1 and branch_id = $2
+     )`,
+    [vendorId, branchId],
+  );
+
+  await client.query(
+    `delete from public.student_health_info
+     where student_id in (
+       select id from public.students where vendor_id = $1 and branch_id = $2
+     )`,
+    [vendorId, branchId],
+  );
+
+  const delStudents = await client.query(
+    `delete from public.students where vendor_id = $1 and branch_id = $2`,
+    [vendorId, branchId],
+  );
+  console.log(`Deleted ${delStudents.rowCount ?? 0} students`);
+
+  // Remove empty classes for this branch so we recreate cleanly from Excel
+  await client.query(`delete from public.classes where branch_id = $1`, [
+    branchId,
+  ]);
+}
+
 async function main() {
   const dryRun = process.argv.includes("--dry-run");
+  const wipe = process.argv.includes("--wipe") || !dryRun;
   const url = process.env.DATABASE_URL;
   if (!url) {
     console.error("DATABASE_URL missing in .env.local");
     process.exit(1);
   }
 
-  const parsed = loadExcel();
+  const excelPath = resolveExcelPath();
+  console.log(`Excel: ${excelPath}`);
+
+  const parsed = loadExcel(excelPath);
   const remaps = parsed.filter((r) => r.remappedFrom);
   const active = parsed.filter((r) => r.status === "active");
   const left = parsed.filter((r) => r.status === "left");
+  const sumPending = active.reduce((s, r) => s + r.totalPending, 0);
 
-  console.log(`Loaded ${parsed.length} rows (${active.length} active, ${left.length} left)`);
+  console.log(
+    `Loaded ${parsed.length} rows (${active.length} active, ${left.length} left)`,
+  );
+  console.log(`Active total pending sum: ${sumPending}`);
   if (remaps.length) {
     console.log(
       "Duplicate Index remaps:",
-      remaps.map((r) => `${r.remappedFrom} → ${r.admissionNo} (${r.fullName})`).join("; "),
+      remaps
+        .map((r) => `${r.remappedFrom} → ${r.admissionNo} (${r.fullName})`)
+        .join("; "),
     );
   }
 
   const sample = parsed.find((r) => r.admissionNo === "595");
   if (sample) {
+    const carried = Math.max(0, sample.totalPending - MONTHLY_AMOUNT);
     console.log(
-      `Sample 595 ${sample.fullName}: carried=${sample.balance} + month=${MONTHLY_AMOUNT} → total=${sample.balance + MONTHLY_AMOUNT}`,
+      `Sample 595 ${sample.fullName}: totalPending=${sample.totalPending} → pendingMonths=${sample.pendingMonths} (excel col=${sample.excelPendingMonths ?? "—"}) → carried=${carried} + month=${MONTHLY_AMOUNT}`,
     );
+  }
+
+  // Cross-check: Excel "Pending Months" vs derived (log mismatches only)
+  const mismatches = active.filter(
+    (r) =>
+      r.excelPendingMonths != null &&
+      Math.abs(r.excelPendingMonths - r.pendingMonths) > 0.05,
+  );
+  if (mismatches.length) {
+    console.log(
+      `Pending-months mismatches (excel vs total/12000): ${mismatches.length} (showing up to 5)`,
+    );
+    for (const r of mismatches.slice(0, 5)) {
+      console.log(
+        `  ${r.admissionNo} ${r.fullName}: excel=${r.excelPendingMonths} derived=${r.pendingMonths} total=${r.totalPending}`,
+      );
+    }
   }
 
   if (dryRun) {
@@ -157,8 +327,13 @@ async function main() {
       byClass.set(r.className, (byClass.get(r.className) ?? 0) + 1);
     }
     console.log("Active by class:", Object.fromEntries(byClass));
-    console.log("DRY RUN — no DB writes.");
+    console.log("DRY RUN — no DB writes. Pass without --dry-run to wipe+import.");
     return;
+  }
+
+  if (!wipe) {
+    console.error("Refusing live import without wipe. Use --wipe (default for live).");
+    process.exit(1);
   }
 
   const client = new pg.Client({
@@ -184,20 +359,15 @@ async function main() {
     if (!branchRes.rows[0]) throw new Error(`Branch not found: ${BRANCH_NAME}`);
     const branchId = branchRes.rows[0].id;
 
-    console.log(`Vendor ${vendorRes.rows[0].name} / branch ${branchRes.rows[0].name}`);
+    console.log(
+      `Vendor ${vendorRes.rows[0].name} / branch ${branchRes.rows[0].name}`,
+    );
 
-    // Ensure classes
+    await wipeVendorBranch(client, vendorId, branchId);
+
     const classIds = new Map<string, string>();
     const neededClasses = [...new Set(parsed.map((r) => r.className))];
     for (const name of neededClasses) {
-      const existing = await client.query<{ id: string }>(
-        `select id from public.classes where branch_id = $1 and name = $2 limit 1`,
-        [branchId, name],
-      );
-      if (existing.rows[0]) {
-        classIds.set(name, existing.rows[0].id);
-        continue;
-      }
       const inserted = await client.query<{ id: string }>(
         `insert into public.classes (vendor_id, branch_id, name, is_active)
          values ($1, $2, $3, true)
@@ -209,136 +379,80 @@ async function main() {
     }
 
     let studentsInserted = 0;
-    let studentsUpdated = 0;
     let plansInserted = 0;
     let duesInserted = 0;
     let enrollmentsInserted = 0;
 
     for (const row of parsed) {
-      const existing = await client.query<{ id: string }>(
-        `select id from public.students
-         where vendor_id = $1 and branch_id = $2 and admission_no = $3
-         limit 1`,
-        [vendorId, branchId, row.admissionNo],
+      const inserted = await client.query<{ id: string }>(
+        `insert into public.students (
+           vendor_id, branch_id, admission_no, full_name,
+           guardian_name, guardian_phone, address, status
+         ) values ($1,$2,$3,$4,$5,$6,$7,$8)
+         returning id`,
+        [
+          vendorId,
+          branchId,
+          row.admissionNo,
+          row.fullName,
+          DEFAULT_GUARDIAN,
+          row.phone,
+          row.address,
+          row.status,
+        ],
+      );
+      const studentId = inserted.rows[0].id;
+      studentsInserted++;
+
+      await client.query(
+        `insert into public.student_health_info (student_id) values ($1)
+         on conflict (student_id) do nothing`,
+        [studentId],
       );
 
-      let studentId: string;
-      if (existing.rows[0]) {
-        studentId = existing.rows[0].id;
+      if (row.status === "active") {
         await client.query(
-          `update public.students set
-             full_name = $1,
-             guardian_name = coalesce(nullif(guardian_name, ''), $2),
-             guardian_phone = case when guardian_phone is null or guardian_phone = '' or guardian_phone = $3
-                                  then $4 else guardian_phone end,
-             address = coalesce($5, address),
-             status = $6
-           where id = $7`,
-          [
-            row.fullName,
-            DEFAULT_GUARDIAN,
-            DEFAULT_PHONE,
-            row.phone,
-            row.address,
-            row.status,
-            studentId,
-          ],
+          `insert into public.student_fee_plans (
+             student_id, monthly_amount, is_free, discount_percent, is_current, effective_from
+           ) values ($1, $2, false, 0, true, current_date)`,
+          [studentId, MONTHLY_AMOUNT],
         );
-        studentsUpdated++;
-      } else {
-        const inserted = await client.query<{ id: string }>(
-          `insert into public.students (
-             vendor_id, branch_id, admission_no, full_name,
-             guardian_name, guardian_phone, address, status
-           ) values ($1,$2,$3,$4,$5,$6,$7,$8)
-           returning id`,
+        plansInserted++;
+
+        const totalDue = row.totalPending;
+        const monthAmount = MONTHLY_AMOUNT;
+        const carried = Math.max(0, totalDue - monthAmount);
+        const dueStatus =
+          totalDue <= 0 ? "paid" : "unpaid";
+
+        await client.query(
+          `insert into public.fee_dues (
+             student_id, vendor_id, branch_id, due_month, due_year,
+             month_amount, carried_forward, total_due, amount_paid, status
+           ) values ($1,$2,$3,$4,$5,$6,$7,$8,0,$9)`,
           [
+            studentId,
             vendorId,
             branchId,
-            row.admissionNo,
-            row.fullName,
-            DEFAULT_GUARDIAN,
-            row.phone,
-            row.address,
-            row.status,
+            DUE_MONTH,
+            DUE_YEAR,
+            monthAmount,
+            carried,
+            totalDue,
+            dueStatus,
           ],
         );
-        studentId = inserted.rows[0].id;
-        studentsInserted++;
-
-        await client.query(
-          `insert into public.student_health_info (student_id) values ($1)
-           on conflict (student_id) do nothing`,
-          [studentId],
-        );
-      }
-
-      if (row.status === "active") {
-        const plan = await client.query<{ id: string }>(
-          `select id from public.student_fee_plans
-           where student_id = $1 and is_current = true
-           limit 1`,
-          [studentId],
-        );
-        if (plan.rows[0]) {
-          await client.query(
-            `update public.student_fee_plans
-             set monthly_amount = $1, is_free = false, discount_percent = 0
-             where id = $2`,
-            [MONTHLY_AMOUNT, plan.rows[0].id],
-          );
-        } else {
-          await client.query(
-            `insert into public.student_fee_plans (
-               student_id, monthly_amount, is_free, discount_percent, is_current, effective_from
-             ) values ($1, $2, false, 0, true, current_date)`,
-            [studentId, MONTHLY_AMOUNT],
-          );
-          plansInserted++;
-        }
-
-        const carried = row.balance;
-        const monthAmount = MONTHLY_AMOUNT;
-        const totalDue = carried + monthAmount;
-        const dueStatus = totalDue <= 0 ? "paid" : "unpaid";
-
-        const dueExists = await client.query<{ id: string }>(
-          `select id from public.fee_dues
-           where student_id = $1 and due_month = $2 and due_year = $3
-           limit 1`,
-          [studentId, DUE_MONTH, DUE_YEAR],
-        );
-        if (!dueExists.rows[0]) {
-          await client.query(
-            `insert into public.fee_dues (
-               student_id, vendor_id, branch_id, due_month, due_year,
-               month_amount, carried_forward, total_due, amount_paid, status
-             ) values ($1,$2,$3,$4,$5,$6,$7,$8,0,$9)`,
-            [
-              studentId,
-              vendorId,
-              branchId,
-              DUE_MONTH,
-              DUE_YEAR,
-              monthAmount,
-              carried,
-              totalDue,
-              dueStatus,
-            ],
-          );
-          duesInserted++;
-        }
+        duesInserted++;
 
         const classId = classIds.get(row.className);
         if (classId) {
-          const en = await client.query(
+          await client.query(
             `insert into public.class_enrollments (class_id, student_id, is_active)
              values ($1, $2, true)
-             on conflict (class_id, student_id) do update set is_active = true, left_at = null
-             returning (xmax = 0) as inserted`,
+             on conflict (class_id, student_id) do update set is_active = true, left_at = null`,
             [classId, studentId],
           );
-          if (en.rows[0]?.inserted) enrollmentsInserted++;
+          enrollmentsInserted++;
         }
       }
     }
@@ -349,11 +463,11 @@ async function main() {
       JSON.stringify(
         {
           studentsInserted,
-          studentsUpdated,
           plansInserted,
           duesInserted,
           enrollmentsInserted,
           classes: neededClasses.length,
+          activeTotalPending: sumPending,
         },
         null,
         2,

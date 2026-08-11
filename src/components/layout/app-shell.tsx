@@ -4,6 +4,7 @@ import { Amiri, DM_Sans, Source_Serif_4 } from "next/font/google";
 import { logoutAction } from "@/actions/auth";
 import { AppShellNav } from "@/components/layout/app-shell-nav";
 import { Button } from "@/components/ui/button";
+import { roleLabel } from "@/lib/auth/roles";
 import type { AppUser } from "@/types/database";
 
 const display = Source_Serif_4({
@@ -66,8 +67,7 @@ export function AppShell({
               </p>
             </div>
             <p className="truncate text-xs text-[#5a6f65]">
-              {profile.full_name} ·{" "}
-              {(profile.role ?? "unknown").replaceAll("_", " ")}
+              {profile.full_name} · {roleLabel(profile.role)}
             </p>
           </div>
           <form action={logoutAction} className="shrink-0">

@@ -45,7 +45,9 @@ export default async function ApprovalsPage() {
         <CardHeader>
           <CardTitle>Approval queue</CardTitle>
           <CardDescription>
-            Accountant → Principal → ledger post (atomic trigger).
+            Admin reviews data-entry submissions and can approve in one step.
+            Legacy two-stage (accountant → principal) still works if those roles
+            are used.
           </CardDescription>
         </CardHeader>
         <CardContent>

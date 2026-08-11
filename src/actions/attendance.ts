@@ -9,14 +9,33 @@ import {
 } from "@/lib/auth/session";
 import { notifyAbsenceAction } from "@/actions/students";
 
-const classSchema = z.object({
-  vendor_id: z.string().uuid(),
-  branch_id: z.string().uuid(),
-  name: z.string().min(1),
-  schedule_note: z.string().optional(),
-  academic_year_id: z.string().uuid().optional().nullable(),
-  teacher_id: z.string().uuid().optional().nullable(),
-});
+const classSchema = z
+  .object({
+    vendor_id: z.string().uuid(),
+    branch_id: z.string().uuid(),
+    name: z.string().optional(),
+    section: z.enum(["hifz", "sariya"]),
+    grade: z.coerce.number().int().min(1).max(7).optional().nullable(),
+    schedule_note: z.string().optional(),
+    academic_year_id: z.string().uuid().optional().nullable(),
+    teacher_id: z.string().uuid().optional().nullable(),
+  })
+  .superRefine((val, ctx) => {
+    if (val.section === "hifz" && val.grade != null) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Hifz has no grade",
+        path: ["grade"],
+      });
+    }
+    if (val.section === "sariya" && (val.grade == null || val.grade < 1 || val.grade > 7)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Sariya requires grade 1–7",
+        path: ["grade"],
+      });
+    }
+  });
 
 export async function createClassAction(input: z.infer<typeof classSchema>) {
   try {
@@ -29,12 +48,20 @@ export async function createClassAction(input: z.infer<typeof classSchema>) {
       return { error: parsed.error.issues.map((i) => i.message).join("; ") };
     }
 
+    const section = parsed.data.section;
+    const grade = section === "hifz" ? null : parsed.data.grade ?? null;
+    const name =
+      parsed.data.name?.trim() ||
+      (section === "hifz" ? "Hifz" : `Sariya ${grade}`);
+
     const { data, error } = await auth.supabase
       .from("classes")
       .insert({
         vendor_id: parsed.data.vendor_id,
         branch_id: parsed.data.branch_id,
-        name: parsed.data.name,
+        name,
+        section,
+        grade,
         schedule_note: parsed.data.schedule_note || null,
         academic_year_id: parsed.data.academic_year_id || null,
         teacher_id: parsed.data.teacher_id || null,
@@ -67,6 +94,14 @@ export async function enrollStudentAction(input: z.infer<typeof enrollSchema>) {
     if (!parsed.success) {
       return { error: parsed.error.issues.map((i) => i.message).join("; ") };
     }
+
+    // One active section/class per student: leave other enrollments.
+    await auth.supabase
+      .from("class_enrollments")
+      .update({ is_active: false, left_at: new Date().toISOString().slice(0, 10) })
+      .eq("student_id", parsed.data.student_id)
+      .eq("is_active", true)
+      .neq("class_id", parsed.data.class_id);
 
     const { error } = await auth.supabase.from("class_enrollments").upsert(
       {

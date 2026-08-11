@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { StudentSearchInput } from "@/components/students/student-search-input";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, formatPendingMonths } from "@/lib/format";
 import { matchesStudentQuery } from "@/lib/student-search";
 
 type Row = {
@@ -49,7 +49,7 @@ export function AtRiskStudentsList({ rows }: { rows: Row[] }) {
               ) : null}
             </div>
             <span>
-              {formatMoney(r.balance)}
+              {formatMoney(r.balance)} · {formatPendingMonths(r.balance)}
               {r.attendance_pct != null
                 ? ` · ${Math.round(r.attendance_pct)}% att`
                 : ""}
