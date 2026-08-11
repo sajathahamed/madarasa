@@ -1,5 +1,5 @@
 import { ClassesClient } from "@/components/classes/classes-client";
-import { canManageClasses } from "@/lib/auth/session";
+import { canEnrollStudents, canManageClasses } from "@/lib/auth/session";
 import { OpsShell } from "@/components/layout/ops-shell";
 import { requireOpsContext } from "@/lib/ops-page";
 
@@ -71,6 +71,7 @@ export default async function ClassesPage() {
         students={students ?? []}
         enrollments={enrollments}
         canManage={canManageClasses(profile.role)}
+        canEnroll={canEnrollStudents(profile.role)}
       />
     </OpsShell>
   );

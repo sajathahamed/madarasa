@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { enrollStudentAction } from "@/actions/attendance";
@@ -111,7 +111,21 @@ export function StudentProfileClient({
   const [isFree, setIsFree] = useState(feePlan?.is_free ?? false);
   const [classId, setClassId] = useState(currentClassId ?? "");
 
-  const currentClass = classes.find((c) => c.id === (currentClassId ?? "")) ?? null;
+  const sectionClasses = useMemo(() => {
+    return classes
+      .filter((c) => c.section === "hifz" || c.section === "sariya")
+      .sort((a, b) => {
+        if (a.section === "hifz" && b.section !== "hifz") return -1;
+        if (b.section === "hifz" && a.section !== "hifz") return 1;
+        const ag = a.grade ?? 99;
+        const bg = b.grade ?? 99;
+        if (ag !== bg) return ag - bg;
+        return a.name.localeCompare(b.name);
+      });
+  }, [classes]);
+
+  const currentClass =
+    sectionClasses.find((c) => c.id === (currentClassId ?? "")) ?? null;
 
   return (
     <div className="space-y-6">
@@ -253,6 +267,7 @@ export function StudentProfileClient({
           </div>
           <p className="text-xs text-[#5a6f65]">
             Only Admin can edit profiles, mark left, or change fee plans.
+            Section/class can be changed below by Admin or Data entry.
           </p>
         </div>
       )}
@@ -303,30 +318,39 @@ export function StudentProfileClient({
                   value={classId}
                   onChange={(e) => setClassId(e.target.value)}
                   required
+                  disabled={sectionClasses.length === 0}
                 >
                   <option value="" disabled>
                     Select Hifz or Sariya 1–7
                   </option>
-                  {classes
-                    .filter((c) => c.section === "hifz" || c.section === "sariya")
-                    .map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {classDisplayName(c.section, c.grade, c.name)}
-                      </option>
-                    ))}
+                  {sectionClasses.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {classDisplayName(c.section, c.grade, c.name)}
+                    </option>
+                  ))}
                 </select>
+                {sectionClasses.length === 0 ? (
+                  <p className="text-xs text-[#5a6f65]">
+                    No Hifz/Sariya classes yet — open Classes to create them
+                    first.
+                  </p>
+                ) : null}
               </div>
               <Button
                 type="submit"
                 pending={pending}
                 pendingLabel="Saving…"
-                disabled={pending || !classId}
+                disabled={pending || !classId || sectionClasses.length === 0}
                 className="bg-[#0b3d2e]"
               >
                 Save section
               </Button>
             </form>
-          ) : null}
+          ) : (
+            <p className="text-xs text-[#5a6f65]">
+              Only Admin or Data entry can change section.
+            </p>
+          )}
         </CardContent>
       </Card>
 

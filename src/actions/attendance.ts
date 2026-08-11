@@ -3,6 +3,7 @@
 import { z } from "zod";
 
 import {
+  canEnrollStudents,
   canManageClasses,
   canMarkAttendance,
   requireProfile,
@@ -88,7 +89,7 @@ export async function enrollStudentAction(input: z.infer<typeof enrollSchema>) {
   try {
     const auth = await requireProfile();
     if ("error" in auth) return { error: auth.error };
-    if (!canManageClasses(auth.profile.role)) return { error: "Forbidden" };
+    if (!canEnrollStudents(auth.profile.role)) return { error: "Forbidden" };
 
     const parsed = enrollSchema.safeParse(input);
     if (!parsed.success) {

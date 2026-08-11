@@ -66,9 +66,14 @@ export function canMarkAttendance(role: string) {
   ].includes(role);
 }
 
-/** Create/edit classes & enrollments — Admin only. */
+/** Create/edit class definitions — Admin only. */
 export function canManageClasses(role: string) {
   return isVendorAdmin(role);
+}
+
+/** Assign / change a student's Hifz or Sariya class — Admin and Data entry. */
+export function canEnrollStudents(role: string) {
+  return canEnterData(role);
 }
 
 /** Library catalog + loans — Admin and Data entry. */

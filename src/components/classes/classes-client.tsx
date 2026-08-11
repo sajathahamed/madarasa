@@ -51,6 +51,7 @@ export function ClassesClient({
   students,
   enrollments,
   canManage,
+  canEnroll = false,
 }: {
   vendorId: string;
   branchId: string;
@@ -58,6 +59,7 @@ export function ClassesClient({
   students: Student[];
   enrollments: Enrollment[];
   canManage: boolean;
+  canEnroll?: boolean;
 }) {
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
@@ -168,7 +170,7 @@ export function ClassesClient({
           </Card>
         ) : null}
 
-        {canManage ? (
+        {canEnroll ? (
           <Card>
             <CardHeader>
               <CardTitle>Enroll student</CardTitle>

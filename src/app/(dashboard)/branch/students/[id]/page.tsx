@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { StudentProfileClient } from "@/components/students/student-profile-client";
 import {
   canEditStudent,
-  canManageClasses,
+  canEnrollStudents,
 } from "@/lib/auth/session";
 import { OpsShell } from "@/components/layout/ops-shell";
 import { requireOpsContext } from "@/lib/ops-page";
@@ -98,7 +98,7 @@ export default async function StudentDetailPage({
           created_at: p.created_at,
         }))}
         canEdit={canEditStudent(profile.role)}
-        canManageEnrollment={canManageClasses(profile.role)}
+        canManageEnrollment={canEnrollStudents(profile.role)}
         classes={(classes ?? []).map((c) => ({
           id: c.id,
           name: c.name,
