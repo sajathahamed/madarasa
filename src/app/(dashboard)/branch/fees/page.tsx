@@ -159,7 +159,7 @@ export default async function FeesPage() {
     <OpsShell
       profile={profile}
       title="Fees"
-      subtitle="Record payments, see who paid, search pending dues"
+      subtitle="Record payments (applied instantly), see who paid, search pending dues"
     >
       <FeesOfficeClient
         students={students ?? []}

@@ -112,7 +112,7 @@ export function RecordPaymentForm({
             else toast.error(result.error);
             return;
           }
-          const success = `Payment successful — ${formatMoney(amount)} for ${studentName} submitted for admin review.`;
+          const success = `Payment applied — ${formatMoney(amount)} for ${studentName}. Balance reduced (no approval needed).`;
           setOk(true);
           setMessage(success);
           if (onSuccess) onSuccess(success);

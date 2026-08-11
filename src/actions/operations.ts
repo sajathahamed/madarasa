@@ -3,6 +3,7 @@
 import { z } from "zod";
 
 import { requireProfile } from "@/lib/auth/session";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { ApprovalStatus, PaymentMethod, DonationType } from "@/types/database";
 
 const studentSchema = z.object({
@@ -156,26 +157,90 @@ export async function recordPaymentAction(input: z.infer<typeof paymentSchema>) 
 
     const { data: student } = await auth.supabase
       .from("students")
-      .select("id, vendor_id, branch_id")
+      .select("id, vendor_id, branch_id, full_name, guardian_phone")
       .eq("id", parsed.data.student_id)
       .maybeSingle();
 
     if (!student) return { error: "Student not found" };
 
-    const { error } = await auth.supabase.from("payments").insert({
-      vendor_id: student.vendor_id,
-      branch_id: student.branch_id,
-      student_id: student.id,
-      fee_due_id: parsed.data.fee_due_id || null,
-      amount: parsed.data.amount,
-      method: parsed.data.method as PaymentMethod,
-      bank_reference: parsed.data.bank_reference || null,
-      recorded_by: auth.user.id,
-      status: "pending_accountant" as ApprovalStatus,
-    });
+    // Prefer selected due; otherwise oldest open due so balance reduces immediately.
+    let feeDueId = parsed.data.fee_due_id || null;
+    if (!feeDueId) {
+      const { data: openDue } = await auth.supabase
+        .from("fee_dues")
+        .select("id")
+        .eq("student_id", student.id)
+        .neq("status", "paid")
+        .order("due_year", { ascending: true })
+        .order("due_month", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      feeDueId = openDue?.id ?? null;
+    }
 
-    if (error) return { error: error.message };
-    return { ok: true as const };
+    // RLS requires insert as pending_accountant; we auto-approve next so dues update.
+    const { data: payment, error } = await auth.supabase
+      .from("payments")
+      .insert({
+        vendor_id: student.vendor_id,
+        branch_id: student.branch_id,
+        student_id: student.id,
+        fee_due_id: feeDueId,
+        amount: parsed.data.amount,
+        method: parsed.data.method as PaymentMethod,
+        bank_reference: parsed.data.bank_reference || null,
+        recorded_by: auth.user.id,
+        status: "pending_accountant" as ApprovalStatus,
+      })
+      .select("id")
+      .single();
+
+    if (error || !payment) {
+      return { error: error?.message ?? "Payment insert failed" };
+    }
+
+    const now = new Date().toISOString();
+    const admin = createAdminClient();
+    const { error: approveError } = await admin
+      .from("payments")
+      .update({
+        status: "approved" as ApprovalStatus,
+        accountant_id: auth.user.id,
+        accountant_action_at: now,
+        accountant_remarks: "Auto-approved on record (no review queue)",
+        principal_id: auth.user.id,
+        principal_action_at: now,
+        principal_remarks: "Auto-approved on record (no review queue)",
+      })
+      .eq("id", payment.id);
+
+    if (approveError) {
+      return {
+        error: `Payment saved but approve failed: ${approveError.message}`,
+        paymentId: payment.id,
+      };
+    }
+
+    // Optional SMS confirm (same path as former approval notify)
+    if (
+      student.guardian_phone &&
+      process.env.PAYMENT_CONFIRM_ON_APPROVAL_ONLY !== "false"
+    ) {
+      try {
+        const { notifyPaymentConfirmation } = await import("@/lib/notify");
+        await notifyPaymentConfirmation({
+          to: student.guardian_phone,
+          studentName: student.full_name,
+          amount: String(parsed.data.amount),
+          vendorId: student.vendor_id,
+          studentId: student.id,
+        });
+      } catch (waErr) {
+        console.error("[payment notify]", waErr);
+      }
+    }
+
+    return { ok: true as const, paymentId: payment.id, applied: true as const };
   } catch (err) {
     console.error("[recordPaymentAction]", err);
     return {

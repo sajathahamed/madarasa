@@ -296,8 +296,8 @@ export function FeesOfficeClient({
             <CardHeader>
               <CardTitle>Record payment</CardTitle>
               <CardDescription>
-                Submit for admin review. You will see a clear success
-                message after saving.
+                Applied immediately — reduces the student&apos;s remaining due
+                (no accountant approval).
               </CardDescription>
             </CardHeader>
             <CardContent>
