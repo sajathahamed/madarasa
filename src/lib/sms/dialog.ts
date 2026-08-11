@@ -322,6 +322,8 @@ export async function sendDialogSmsBulk(opts: {
   message: string;
   vendorId?: string | null;
   purpose?: string;
+  /** Parallel to `to` — used when logging SMS against students. */
+  studentIds?: (string | null | undefined)[];
 }): Promise<SmsResult> {
   if (process.env.DIALOG_SMS_ENABLED === "false") {
     return { ok: false, queued: true, error: "Dialog SMS disabled" };
@@ -332,11 +334,12 @@ export async function sendDialogSmsBulk(opts: {
     // Fall back: send one-by-one for other providers
     let okCount = 0;
     let last: SmsResult = { ok: false, error: "No recipients" };
-    for (const phone of opts.to) {
+    for (let i = 0; i < opts.to.length; i++) {
       last = await sendDialogSms({
-        to: phone,
+        to: opts.to[i],
         message: opts.message,
         vendorId: opts.vendorId,
+        studentId: opts.studentIds?.[i] ?? null,
         purpose: opts.purpose,
       });
       if (last.ok) okCount++;
@@ -352,13 +355,14 @@ export async function sendDialogSmsBulk(opts: {
   const status = result.ok ? "sent" : result.queued ? "queued" : "failed";
 
   await Promise.all(
-    opts.to.map((phone) =>
+    opts.to.map((phone, i) =>
       logSms({
         to: phone,
         body: opts.message,
         status,
         response: result.response ?? { error: result.error },
         vendorId: opts.vendorId,
+        studentId: opts.studentIds?.[i] ?? null,
         purpose: opts.purpose || "bulk",
       }),
     ),
