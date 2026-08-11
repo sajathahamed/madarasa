@@ -5,8 +5,10 @@ import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
+  sendBulkStaffSmsAction,
   sendBulkStudentSmsAction,
   sendCustomSmsAction,
+  type BulkStaffSmsResult,
   type BulkStudentSmsResult,
   type CustomSmsRecipientResult,
 } from "@/actions/sms";
@@ -31,12 +33,22 @@ type SmsStudent = {
   grade: number | null;
 };
 
+type SmsStaff = {
+  id: string;
+  full_name: string;
+  staff_code: string | null;
+  phone: string;
+  role_title: string | null;
+};
+
 type SmsClass = {
   id: string;
   name: string;
   section: AcademicSection | null;
   grade: number | null;
 };
+
+type SmsMode = "students" | "staff" | "custom";
 
 function newRow(): RecipientRow {
   return { id: crypto.randomUUID(), name: "", phone: "" };
@@ -50,14 +62,16 @@ export function SendSmsClient({
   configured,
   mask,
   students,
+  staff,
   classes,
 }: {
   configured: boolean;
   mask: string;
   students: SmsStudent[];
+  staff: SmsStaff[];
   classes: SmsClass[];
 }) {
-  const [mode, setMode] = useState<"students" | "custom">("students");
+  const [mode, setMode] = useState<SmsMode>("students");
   const [recipients, setRecipients] = useState<RecipientRow[]>([newRow()]);
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
@@ -69,6 +83,9 @@ export function SendSmsClient({
   const [studentResults, setStudentResults] = useState<
     BulkStudentSmsResult[] | null
   >(null);
+  const [staffResults, setStaffResults] = useState<BulkStaffSmsResult[] | null>(
+    null,
+  );
   const [banner, setBanner] = useState<{
     ok: boolean;
     text: string;
@@ -94,10 +111,23 @@ export function SendSmsClient({
     });
   }, [students, search, classFilter]);
 
-  const filteredIds = useMemo(
-    () => filteredStudents.map((s) => s.id),
-    [filteredStudents],
-  );
+  const filteredStaff = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return staff.filter((s) => {
+      if (!q) return true;
+      return (
+        s.full_name.toLowerCase().includes(q) ||
+        (s.staff_code || "").toLowerCase().includes(q) ||
+        s.phone.toLowerCase().includes(q) ||
+        (s.role_title || "").toLowerCase().includes(q)
+      );
+    });
+  }, [staff, search]);
+
+  const filteredIds = useMemo(() => {
+    if (mode === "staff") return filteredStaff.map((s) => s.id);
+    return filteredStudents.map((s) => s.id);
+  }, [mode, filteredStaff, filteredStudents]);
 
   const selectedInView = filteredIds.filter((id) => selected.has(id)).length;
   const allFilteredSelected =
@@ -106,11 +136,16 @@ export function SendSmsClient({
   const selectedWithPhone = useMemo(() => {
     let count = 0;
     for (const id of selected) {
-      const s = students.find((st) => st.id === id);
-      if (s && hasPhone(s.guardian_phone)) count++;
+      if (mode === "staff") {
+        const s = staff.find((st) => st.id === id);
+        if (s && hasPhone(s.phone)) count++;
+      } else {
+        const s = students.find((st) => st.id === id);
+        if (s && hasPhone(s.guardian_phone)) count++;
+      }
     }
     return count;
-  }, [selected, students]);
+  }, [selected, students, staff, mode]);
 
   const selectedWithoutPhone = selected.size - selectedWithPhone;
 
@@ -126,7 +161,7 @@ export function SendSmsClient({
     );
   };
 
-  const toggleStudent = (id: string) => {
+  const toggleSelected = (id: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -147,11 +182,46 @@ export function SendSmsClient({
     });
   };
 
-  const switchMode = (next: "students" | "custom") => {
+  const switchMode = (next: SmsMode) => {
     setMode(next);
     setBanner(null);
     setCustomResults(null);
     setStudentResults(null);
+    setStaffResults(null);
+    setSelected(new Set());
+    setSearch("");
+    setClassFilter("all");
+  };
+
+  const applyBulkResult = (result: {
+    error?: string;
+    results?: BulkStudentSmsResult[] | BulkStaffSmsResult[];
+    resultDesc?: string;
+    message?: string;
+    ok?: boolean;
+    sent?: number;
+  }) => {
+    if (result.error && !("sent" in result)) {
+      setBanner({ ok: false, text: result.error });
+      toast.error(result.error);
+      return;
+    }
+
+    if (result.results) {
+      if (mode === "staff") {
+        setStaffResults(result.results as BulkStaffSmsResult[]);
+      } else {
+        setStudentResults(result.results as BulkStudentSmsResult[]);
+      }
+    }
+
+    const resultDesc = result.resultDesc ? String(result.resultDesc) : null;
+    const text = result.message || result.error || "Done";
+    const detail = resultDesc ? `${text} · resultDesc=${resultDesc}` : text;
+    const ok = Boolean(result.ok);
+    setBanner({ ok, text: detail });
+    if (ok) toast.success(detail);
+    else toast.error(detail);
   };
 
   const onSubmit = (e: React.FormEvent) => {
@@ -159,6 +229,7 @@ export function SendSmsClient({
     setBanner(null);
     setCustomResults(null);
     setStudentResults(null);
+    setStaffResults(null);
 
     if (mode === "students") {
       if (selected.size === 0) {
@@ -171,30 +242,23 @@ export function SendSmsClient({
           message,
           studentIds: [...selected],
         });
+        applyBulkResult(result);
+      });
+      return;
+    }
 
-        if ("error" in result && result.error && !("sent" in result)) {
-          setBanner({ ok: false, text: result.error });
-          toast.error(result.error);
-          return;
-        }
+    if (mode === "staff") {
+      if (selected.size === 0) {
+        toast.error("Select at least one staff member");
+        return;
+      }
 
-        if ("results" in result && result.results) {
-          setStudentResults(result.results);
-        }
-
-        const resultDesc =
-          "resultDesc" in result && result.resultDesc
-            ? String(result.resultDesc)
-            : null;
-        const text =
-          ("message" in result && result.message) ||
-          ("error" in result && result.error) ||
-          "Done";
-        const detail = resultDesc ? `${text} · resultDesc=${resultDesc}` : text;
-        const ok = Boolean("ok" in result && result.ok);
-        setBanner({ ok, text: detail });
-        if (ok) toast.success(detail);
-        else toast.error(detail);
+      startTransition(async () => {
+        const result = await sendBulkStaffSmsAction({
+          message,
+          staffIds: [...selected],
+        });
+        applyBulkResult(result);
       });
       return;
     }
@@ -234,6 +298,11 @@ export function SendSmsClient({
     });
   };
 
+  const bulkLabel =
+    mode === "staff"
+      ? `Send to ${selectedWithPhone || 0} staff`
+      : `Send to ${selectedWithPhone || 0} student${selectedWithPhone === 1 ? "" : "s"}`;
+
   return (
     <form className="grid gap-6" onSubmit={onSubmit}>
       <div className="rounded-lg border border-[#0b3d2e]/15 bg-[#0b3d2e]/[0.03] px-3 py-2 text-sm text-[#5a6f65]">
@@ -261,6 +330,16 @@ export function SendSmsClient({
           disabled={pending}
         >
           Students (bulk)
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={mode === "staff" ? "default" : "outline"}
+          className={mode === "staff" ? "bg-[#0b3d2e]" : ""}
+          onClick={() => switchMode("staff")}
+          disabled={pending}
+        >
+          Staff (bulk)
         </Button>
         <Button
           type="button"
@@ -346,7 +425,7 @@ export function SendSmsClient({
                           type="checkbox"
                           className="mt-1 size-4 accent-[#0b3d2e]"
                           checked={checked}
-                          onChange={() => toggleStudent(s.id)}
+                          onChange={() => toggleSelected(s.id)}
                           disabled={pending}
                         />
                         <span className="min-w-0 flex-1">
@@ -374,7 +453,87 @@ export function SendSmsClient({
             )}
           </div>
         </div>
-      ) : (
+      ) : null}
+
+      {mode === "staff" ? (
+        <div className="space-y-3">
+          <div className="min-w-[12rem] space-y-1">
+            <Label htmlFor="sms-staff-search">Search</Label>
+            <Input
+              id="sms-staff-search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Name, code, role, or phone"
+              disabled={pending}
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-[#5a6f65]">
+            <p>
+              {selected.size} selected
+              {selectedWithoutPhone > 0
+                ? ` · ${selectedWithoutPhone} without phone (will skip)`
+                : ""}
+              {" · "}
+              {selectedWithPhone} ready to send
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={toggleSelectAllFiltered}
+              disabled={pending || filteredIds.length === 0}
+            >
+              {allFilteredSelected ? "Clear filtered" : "Select all filtered"}
+            </Button>
+          </div>
+
+          <div className="max-h-72 overflow-auto rounded-lg border border-[#0b3d2e]/10">
+            {filteredStaff.length === 0 ? (
+              <p className="px-3 py-6 text-center text-sm text-[#5a6f65]">
+                No active staff match this filter.
+              </p>
+            ) : (
+              <ul className="divide-y divide-[#0b3d2e]/10">
+                {filteredStaff.map((s) => {
+                  const phoneOk = hasPhone(s.phone);
+                  const checked = selected.has(s.id);
+                  return (
+                    <li key={s.id}>
+                      <label className="flex cursor-pointer items-start gap-3 px-3 py-2.5 hover:bg-[#0b3d2e]/[0.03]">
+                        <input
+                          type="checkbox"
+                          className="mt-1 size-4 accent-[#0b3d2e]"
+                          checked={checked}
+                          onChange={() => toggleSelected(s.id)}
+                          disabled={pending}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block font-medium text-[#0b3d2e]">
+                            {s.full_name}
+                          </span>
+                          <span className="block text-xs text-[#5a6f65]">
+                            {s.staff_code || "No code"}
+                            {s.role_title ? ` · ${s.role_title}` : ""}
+                            {" · "}
+                            {phoneOk ? (
+                              s.phone
+                            ) : (
+                              <span className="text-amber-800">No phone</span>
+                            )}
+                          </span>
+                        </span>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {mode === "custom" ? (
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-2">
             <Label>Recipients</Label>
@@ -441,7 +600,7 @@ export function SendSmsClient({
             ))}
           </ul>
         </div>
-      )}
+      ) : null}
 
       <div className="space-y-1">
         <Label htmlFor="sms-message">Message</Label>
@@ -472,6 +631,39 @@ export function SendSmsClient({
           {studentResults.map((r) => (
             <li
               key={r.studentId}
+              className="flex items-start justify-between gap-3 rounded-lg border border-[#0b3d2e]/10 px-3 py-2"
+            >
+              <div>
+                <p className="font-medium">{r.name}</p>
+                <p className="text-xs text-[#5a6f65]">
+                  {r.phone || "No phone"}
+                </p>
+              </div>
+              <p
+                className={
+                  r.status === "sent"
+                    ? "text-right text-[#0b3d2e]"
+                    : r.status === "skipped"
+                      ? "text-right text-amber-800"
+                      : "text-right text-destructive"
+                }
+              >
+                {r.status === "sent"
+                  ? "Sent"
+                  : r.status === "skipped"
+                    ? r.error || "Skipped"
+                    : r.error || "Failed"}
+              </p>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {staffResults && staffResults.length > 0 ? (
+        <ul className="max-h-56 space-y-2 overflow-auto text-sm">
+          {staffResults.map((r) => (
+            <li
+              key={r.staffId}
               className="flex items-start justify-between gap-3 rounded-lg border border-[#0b3d2e]/10 px-3 py-2"
             >
               <div>
@@ -536,13 +728,11 @@ export function SendSmsClient({
         className="bg-[#0b3d2e]"
         disabled={
           !configured ||
-          (mode === "students" &&
+          ((mode === "students" || mode === "staff") &&
             (selected.size === 0 || selectedWithPhone === 0))
         }
       >
-        {mode === "students"
-          ? `Send to ${selectedWithPhone || 0} student${selectedWithPhone === 1 ? "" : "s"}`
-          : "Send SMS"}
+        {mode === "custom" ? "Send SMS" : bulkLabel}
       </Button>
     </form>
   );

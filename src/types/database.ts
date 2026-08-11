@@ -356,6 +356,7 @@ type Tables = {
       amount: number;
       type: DonationType;
       bank_reference: string | null;
+      notes: string | null;
       received_by: string;
       status: ApprovalStatus;
       accountant_id: string | null;
@@ -375,6 +376,7 @@ type Tables = {
       amount: number;
       type: DonationType;
       bank_reference?: string | null;
+      notes?: string | null;
       received_by: string;
       status?: ApprovalStatus;
       accountant_id?: string | null;
@@ -394,6 +396,7 @@ type Tables = {
       amount?: number;
       type?: DonationType;
       bank_reference?: string | null;
+      notes?: string | null;
       received_by?: string;
       status?: ApprovalStatus;
       accountant_id?: string | null;
@@ -967,6 +970,48 @@ type Tables = {
     };
     Relationships: [];
   };
+  password_reset_otps: {
+    Row: {
+      id: string;
+      user_id: string;
+      email: string;
+      phone: string;
+      code_hash: string;
+      attempts: number;
+      max_attempts: number;
+      expires_at: string;
+      verified_at: string | null;
+      consumed_at: string | null;
+      created_at: string;
+    };
+    Insert: {
+      id?: string;
+      user_id: string;
+      email: string;
+      phone: string;
+      code_hash: string;
+      attempts?: number;
+      max_attempts?: number;
+      expires_at: string;
+      verified_at?: string | null;
+      consumed_at?: string | null;
+      created_at?: string;
+    };
+    Update: {
+      id?: string;
+      user_id?: string;
+      email?: string;
+      phone?: string;
+      code_hash?: string;
+      attempts?: number;
+      max_attempts?: number;
+      expires_at?: string;
+      verified_at?: string | null;
+      consumed_at?: string | null;
+      created_at?: string;
+    };
+    Relationships: [];
+  };
 };
 
 export type Database = {
@@ -977,6 +1022,10 @@ export type Database = {
       generate_monthly_fee_dues: {
         Args: { p_month?: number; p_year?: number };
         Returns: number;
+      };
+      lookup_auth_user_by_email: {
+        Args: { p_email: string };
+        Returns: { id: string; email: string }[];
       };
     };
     Enums: {

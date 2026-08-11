@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { requireProfile } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { displayVendorName } from "@/lib/vendor-branding";
 import type { ApprovalStatus, PaymentMethod, DonationType } from "@/types/database";
 
 const studentSchema = z.object({
@@ -314,6 +315,7 @@ const donationSchema = z.object({
   amount: z.coerce.number().positive(),
   type: z.enum(["cash", "bank_transfer"]),
   bank_reference: z.string().optional(),
+  notes: z.string().optional(),
 });
 
 export async function recordDonationAction(input: z.infer<typeof donationSchema>) {
@@ -333,24 +335,131 @@ export async function recordDonationAction(input: z.infer<typeof donationSchema>
       return { error: "Select a branch before recording a donation." };
     }
 
-    const { error } = await auth.supabase.from("donations").insert({
+    const baseRow = {
       vendor_id: parsed.data.vendor_id,
       branch_id: parsed.data.branch_id,
       donor_name: parsed.data.donor_name,
       donor_phone: parsed.data.donor_phone || null,
       amount: parsed.data.amount,
       type: parsed.data.type as DonationType,
-      bank_reference: parsed.data.bank_reference || null,
+      bank_reference: parsed.data.bank_reference?.trim() || null,
       received_by: auth.user.id,
       status: "pending_accountant" as ApprovalStatus,
-    });
+    };
+
+    const notes = parsed.data.notes?.trim() || null;
+    const insertRow = notes ? { ...baseRow, notes } : baseRow;
+    let { data: donation, error } = await auth.supabase
+      .from("donations")
+      .insert(insertRow)
+      .select("id, donor_name, donor_phone, amount, vendor_id")
+      .single();
+
+    // If notes column not migrated yet, retry without it.
+    if (error && notes && /notes/i.test(error.message)) {
+      const retry = await auth.supabase
+        .from("donations")
+        .insert(baseRow)
+        .select("id, donor_name, donor_phone, amount, vendor_id")
+        .single();
+      donation = retry.data;
+      error = retry.error;
+    }
 
     if (error) return { error: error.message };
-    return { ok: true as const };
+    if (!donation) return { error: "Failed to record donation" };
+
+    const { data: vendor } = await auth.supabase
+      .from("vendors")
+      .select("name")
+      .eq("id", parsed.data.vendor_id)
+      .maybeSingle();
+
+    const collegeName = displayVendorName(vendor?.name);
+
+    return {
+      ok: true as const,
+      donationId: donation.id,
+      donorName: donation.donor_name,
+      donorPhone: donation.donor_phone,
+      amount: Number(donation.amount),
+      collegeName,
+    };
   } catch (err) {
     console.error("[recordDonationAction]", err);
     return {
       error: err instanceof Error ? err.message : "Failed to record donation",
+    };
+  }
+}
+
+export async function sendDonationConfirmSmsAction(opts: {
+  donationId: string;
+  message?: string;
+}) {
+  try {
+    const auth = await requireProfile();
+    if ("error" in auth) return { error: auth.error };
+    if (
+      !["super_admin", "vendor_admin", "data_entry", "accountant", "principal"].includes(
+        auth.profile.role,
+      )
+    ) {
+      return { error: "Forbidden" };
+    }
+
+    const { data: donation } = await auth.supabase
+      .from("donations")
+      .select("id, donor_name, donor_phone, amount, vendor_id")
+      .eq("id", opts.donationId)
+      .maybeSingle();
+
+    if (!donation) return { error: "Donation not found" };
+    if (!donation.donor_phone) {
+      return { error: "No phone on this donation" };
+    }
+
+    const { data: vendor } = await auth.supabase
+      .from("vendors")
+      .select("name")
+      .eq("id", donation.vendor_id)
+      .maybeSingle();
+
+    const collegeName = displayVendorName(vendor?.name);
+    const amountText = Number(donation.amount).toLocaleString("en-LK", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    const defaultMsg = `JazakAllah khair ${donation.donor_name}. Your donation of LKR ${amountText} to ${collegeName} has been received. May Allah reward you.`;
+    const message = (opts.message || defaultMsg).trim();
+    if (!message) return { error: "Message is required" };
+
+    const { sendDialogSms, isDialogSmsConfigured } = await import(
+      "@/lib/sms/dialog"
+    );
+    if (!isDialogSmsConfigured()) {
+      return { error: "Dialog SMS (Upview Tech) is not configured" };
+    }
+
+    const result = await sendDialogSms({
+      to: donation.donor_phone,
+      message,
+      vendorId: donation.vendor_id,
+      purpose: "donation_confirmation",
+    });
+
+    if (!result.ok) {
+      return { error: result.error || "SMS failed" };
+    }
+    return {
+      ok: true as const,
+      message: "SMS sent (Upview Tech)",
+      phone: donation.donor_phone,
+    };
+  } catch (err) {
+    console.error("[sendDonationConfirmSmsAction]", err);
+    return {
+      error: err instanceof Error ? err.message : "Failed to send SMS",
     };
   }
 }

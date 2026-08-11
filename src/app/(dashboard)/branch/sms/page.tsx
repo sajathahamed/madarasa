@@ -30,6 +30,13 @@ export default async function SendSmsPage() {
     .order("full_name")
     .limit(400);
 
+  let staffQ = supabase
+    .from("staff_members")
+    .select("id, full_name, staff_code, phone, role_title, status")
+    .eq("status", "active")
+    .order("full_name")
+    .limit(400);
+
   let classesQ = supabase
     .from("classes")
     .select("id, name, section, grade")
@@ -38,17 +45,17 @@ export default async function SendSmsPage() {
 
   if (profile.vendor_id) {
     studentsQ = studentsQ.eq("vendor_id", profile.vendor_id);
+    staffQ = staffQ.eq("vendor_id", profile.vendor_id);
     classesQ = classesQ.eq("vendor_id", profile.vendor_id);
   }
   if (profile.branch_id) {
     studentsQ = studentsQ.eq("branch_id", profile.branch_id);
+    staffQ = staffQ.eq("branch_id", profile.branch_id);
     classesQ = classesQ.eq("branch_id", profile.branch_id);
   }
 
-  const [{ data: students }, { data: classes }] = await Promise.all([
-    studentsQ,
-    classesQ,
-  ]);
+  const [{ data: students }, { data: staff }, { data: classes }] =
+    await Promise.all([studentsQ, staffQ, classesQ]);
 
   const studentIds = (students ?? []).map((s) => s.id);
   const classById = new Map(
@@ -83,8 +90,9 @@ export default async function SendSmsPage() {
         <CardHeader>
           <CardTitle>Send SMS</CardTitle>
           <CardDescription>
-            Send to active students in bulk, or enter custom name and phone
-            rows. Messages go via Dialog Rich Communication (mask Upview Tech).
+            Send to active students or staff in bulk, or enter custom name and
+            phone rows. Messages go via Dialog Rich Communication (mask Upview
+            Tech).
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -105,6 +113,13 @@ export default async function SendSmsPage() {
                 grade: klass?.grade ?? null,
               };
             })}
+            staff={(staff ?? []).map((s) => ({
+              id: s.id,
+              full_name: s.full_name,
+              staff_code: s.staff_code,
+              phone: s.phone || "",
+              role_title: s.role_title,
+            }))}
             classes={(classes ?? []).map((c) => ({
               id: c.id,
               name: c.name,

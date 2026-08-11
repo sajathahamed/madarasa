@@ -6,6 +6,11 @@ import { useRouter } from "next/navigation";
 import { Amiri, DM_Sans, Source_Serif_4 } from "next/font/google";
 
 import { loginAction } from "@/actions/auth";
+import {
+  completePasswordResetAction,
+  requestPasswordResetOtpAction,
+  verifyPasswordResetOtpAction,
+} from "@/actions/password-reset";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,10 +31,34 @@ const arabic = Amiri({
   variable: "--font-arabic",
 });
 
+type AuthView = "login" | "forgot-email" | "forgot-otp" | "forgot-password";
+
 export default function LoginPage() {
   const router = useRouter();
+  const [view, setView] = useState<AuthView>("login");
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetId, setResetId] = useState<string | null>(null);
+  const [maskedPhone, setMaskedPhone] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  const resetForgotState = () => {
+    setError(null);
+    setInfo(null);
+    setResetId(null);
+    setMaskedPhone(null);
+  };
+
+  const goLogin = () => {
+    resetForgotState();
+    setView("login");
+  };
+
+  const goForgot = () => {
+    resetForgotState();
+    setView("forgot-email");
+  };
 
   return (
     <main
@@ -128,10 +157,24 @@ export default function LoginPage() {
           className="text-3xl text-[#0b3d2e]"
           style={{ fontFamily: "var(--font-display), serif" }}
         >
-          Sign in
+          {view === "login"
+            ? "Sign in"
+            : view === "forgot-email"
+              ? "Forgot password"
+              : view === "forgot-otp"
+                ? "Verify OTP"
+                : "New password"}
         </h1>
         <p className="mt-1 text-sm text-[#5a6f65]">
-          Welcome back — enter your staff credentials to continue.
+          {view === "login"
+            ? "Welcome back — enter your staff credentials to continue."
+            : view === "forgot-email"
+              ? "Enter your account email. We will SMS a one-time code to the phone on your profile."
+              : view === "forgot-otp"
+                ? maskedPhone
+                  ? `Enter the 6-digit code sent to ${maskedPhone}.`
+                  : "Enter the 6-digit code from the SMS."
+                : "Choose a new password for your account."}
         </p>
         <p
           className="mt-2 hidden text-right text-lg text-[#0b3d2e]/80 lg:block"
@@ -142,60 +185,294 @@ export default function LoginPage() {
           أهلاً وسهلاً بكم في مدرسة
         </p>
 
-        <form
-          className="mt-8 space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const formData = new FormData(e.currentTarget);
-            setError(null);
-            startTransition(async () => {
-              const result = await loginAction(formData);
-              if (result.error) {
-                setError(result.error);
-                return;
-              }
-              if (result.redirectTo) {
-                router.push(result.redirectTo);
-                router.refresh();
-              }
-            });
-          }}
-        >
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              required
-              autoComplete="email"
-              className="h-12 rounded-xl border-[#0b3d2e]/15 bg-white"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              required
-              autoComplete="current-password"
-              className="h-12 rounded-xl border-[#0b3d2e]/15 bg-white"
-            />
-          </div>
-          {error ? (
-            <p className="text-sm text-red-700" role="alert">
-              {error}
-            </p>
-          ) : null}
-          <Button
-            type="submit"
-            disabled={pending}
-            className="h-12 w-full rounded-xl bg-[#0b3d2e] text-base hover:bg-[#0f4f3b]"
+        {view === "login" ? (
+          <form
+            className="mt-8 space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              setError(null);
+              setInfo(null);
+              startTransition(async () => {
+                const result = await loginAction(formData);
+                if (result.error) {
+                  setError(result.error);
+                  return;
+                }
+                if (result.redirectTo) {
+                  router.push(result.redirectTo);
+                  router.refresh();
+                }
+              });
+            }}
           >
-            {pending ? "Signing in…" : "Sign in"}
-          </Button>
-        </form>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                required
+                autoComplete="email"
+                className="h-12 rounded-xl border-[#0b3d2e]/15 bg-white"
+              />
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="password">Password</Label>
+                <button
+                  type="button"
+                  className="text-sm text-[#0b3d2e] underline-offset-2 hover:underline"
+                  onClick={goForgot}
+                >
+                  Forgot password?
+                </button>
+              </div>
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                required
+                autoComplete="current-password"
+                className="h-12 rounded-xl border-[#0b3d2e]/15 bg-white"
+              />
+            </div>
+            {error ? (
+              <p className="text-sm text-red-700" role="alert">
+                {error}
+              </p>
+            ) : null}
+            <Button
+              type="submit"
+              disabled={pending}
+              className="h-12 w-full rounded-xl bg-[#0b3d2e] text-base hover:bg-[#0f4f3b]"
+            >
+              {pending ? "Signing in…" : "Sign in"}
+            </Button>
+          </form>
+        ) : null}
+
+        {view === "forgot-email" ? (
+          <form
+            className="mt-8 space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              const email = String(formData.get("email") ?? "").trim();
+              setError(null);
+              setInfo(null);
+              setResetEmail(email);
+              startTransition(async () => {
+                const result = await requestPasswordResetOtpAction({ email });
+                if ("error" in result) {
+                  setError(result.error);
+                  return;
+                }
+                if (result.noPhone) {
+                  setError(result.message);
+                  return;
+                }
+                if (result.resetId) {
+                  setResetId(result.resetId);
+                  setMaskedPhone(result.maskedPhone ?? null);
+                  setInfo(result.message);
+                  setView("forgot-otp");
+                  return;
+                }
+                // Account may not exist — show generic message, stay on step
+                setInfo(result.message || "Check your phone if an account exists.");
+              });
+            }}
+          >
+            <div className="space-y-2">
+              <Label htmlFor="reset-email">Email</Label>
+              <Input
+                id="reset-email"
+                name="email"
+                type="email"
+                required
+                autoComplete="email"
+                defaultValue={resetEmail}
+                className="h-12 rounded-xl border-[#0b3d2e]/15 bg-white"
+              />
+            </div>
+            {error ? (
+              <p className="text-sm text-red-700" role="alert">
+                {error}
+              </p>
+            ) : null}
+            {info ? (
+              <p className="text-sm text-[#0b3d2e]" role="status">
+                {info}
+              </p>
+            ) : null}
+            <Button
+              type="submit"
+              disabled={pending}
+              className="h-12 w-full rounded-xl bg-[#0b3d2e] text-base hover:bg-[#0f4f3b]"
+            >
+              {pending ? "Sending OTP…" : "Send OTP by SMS"}
+            </Button>
+            <button
+              type="button"
+              className="w-full text-sm text-[#5a6f65] underline-offset-2 hover:underline"
+              onClick={goLogin}
+              disabled={pending}
+            >
+              Back to sign in
+            </button>
+          </form>
+        ) : null}
+
+        {view === "forgot-otp" && resetId ? (
+          <form
+            className="mt-8 space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              const code = String(formData.get("code") ?? "").trim();
+              setError(null);
+              setInfo(null);
+              startTransition(async () => {
+                const result = await verifyPasswordResetOtpAction({
+                  resetId,
+                  code,
+                });
+                if ("error" in result) {
+                  setError(result.error);
+                  return;
+                }
+                setInfo(result.message);
+                setView("forgot-password");
+              });
+            }}
+          >
+            <div className="space-y-2">
+              <Label htmlFor="otp-code">OTP code</Label>
+              <Input
+                id="otp-code"
+                name="code"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                required
+                placeholder="6-digit code"
+                className="h-12 rounded-xl border-[#0b3d2e]/15 bg-white tracking-[0.3em]"
+              />
+            </div>
+            {error ? (
+              <p className="text-sm text-red-700" role="alert">
+                {error}
+              </p>
+            ) : null}
+            {info ? (
+              <p className="text-sm text-[#0b3d2e]" role="status">
+                {info}
+              </p>
+            ) : null}
+            <Button
+              type="submit"
+              disabled={pending}
+              className="h-12 w-full rounded-xl bg-[#0b3d2e] text-base hover:bg-[#0f4f3b]"
+            >
+              {pending ? "Verifying…" : "Verify OTP"}
+            </Button>
+            <button
+              type="button"
+              className="w-full text-sm text-[#5a6f65] underline-offset-2 hover:underline"
+              onClick={() => {
+                setError(null);
+                setInfo(null);
+                setView("forgot-email");
+              }}
+              disabled={pending}
+            >
+              Resend / use a different email
+            </button>
+          </form>
+        ) : null}
+
+        {view === "forgot-password" && resetId ? (
+          <form
+            className="mt-8 space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              setError(null);
+              setInfo(null);
+              startTransition(async () => {
+                const result = await completePasswordResetAction({
+                  resetId,
+                  password: String(formData.get("password") ?? ""),
+                  confirmPassword: String(
+                    formData.get("confirmPassword") ?? "",
+                  ),
+                });
+                if ("error" in result) {
+                  setError(result.error);
+                  return;
+                }
+                setInfo(result.message);
+                setTimeout(() => {
+                  goLogin();
+                  setInfo(result.message);
+                }, 400);
+              });
+            }}
+          >
+            <div className="space-y-2">
+              <Label htmlFor="new-password">New password</Label>
+              <Input
+                id="new-password"
+                name="password"
+                type="password"
+                required
+                minLength={6}
+                autoComplete="new-password"
+                className="h-12 rounded-xl border-[#0b3d2e]/15 bg-white"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password">Confirm password</Label>
+              <Input
+                id="confirm-password"
+                name="confirmPassword"
+                type="password"
+                required
+                minLength={6}
+                autoComplete="new-password"
+                className="h-12 rounded-xl border-[#0b3d2e]/15 bg-white"
+              />
+            </div>
+            {error ? (
+              <p className="text-sm text-red-700" role="alert">
+                {error}
+              </p>
+            ) : null}
+            {info ? (
+              <p className="text-sm text-[#0b3d2e]" role="status">
+                {info}
+              </p>
+            ) : null}
+            <Button
+              type="submit"
+              disabled={pending}
+              className="h-12 w-full rounded-xl bg-[#0b3d2e] text-base hover:bg-[#0f4f3b]"
+            >
+              {pending ? "Updating…" : "Update password"}
+            </Button>
+            <button
+              type="button"
+              className="w-full text-sm text-[#5a6f65] underline-offset-2 hover:underline"
+              onClick={goLogin}
+              disabled={pending}
+            >
+              Back to sign in
+            </button>
+          </form>
+        ) : null}
+
         <p
           className="mt-10 text-center text-sm text-[#5a6f65]"
           dir="rtl"

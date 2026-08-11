@@ -11,6 +11,7 @@ import { formatDate, formatMoney } from "@/lib/format";
 import { OpsShell } from "@/components/layout/ops-shell";
 import { requireOpsContext } from "@/lib/ops-page";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { displayVendorName } from "@/lib/vendor-branding";
 
 export default async function DonationsPage() {
   const { supabase, profile } = await requireOpsContext();
@@ -18,7 +19,7 @@ export default async function DonationsPage() {
   let branchesQ = supabase.from("branches").select("id, name, vendor_id").order("name");
   let donationsQ = supabase
     .from("donations")
-    .select("id, amount, status, type, donor_name, created_at")
+    .select("id, amount, status, type, donor_name, donor_phone, created_at")
     .order("created_at", { ascending: false })
     .limit(50);
 
@@ -30,13 +31,19 @@ export default async function DonationsPage() {
     donationsQ = donationsQ.eq("branch_id", profile.branch_id);
   }
 
-  const [{ data: branches }, { data: donations }] = await Promise.all([
-    branchesQ,
-    donationsQ,
-  ]);
+  const vendorId = profile.vendor_id || "";
+  const [{ data: branches }, { data: donations }, { data: vendor }] =
+    await Promise.all([
+      branchesQ,
+      donationsQ,
+      vendorId
+        ? supabase.from("vendors").select("name").eq("id", vendorId).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
 
-  const vendorId = profile.vendor_id || branches?.[0]?.vendor_id || "";
+  const resolvedVendorId = vendorId || branches?.[0]?.vendor_id || "";
   const branchId = profile.branch_id || branches?.[0]?.id || "";
+  const collegeName = displayVendorName(vendor?.name);
 
   return (
     <OpsShell profile={profile} title="Donations">
@@ -45,10 +52,16 @@ export default async function DonationsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Record donation</CardTitle>
-              <CardDescription>Goes through dual approval.</CardDescription>
+              <CardDescription>
+                Dual approval · optional SMS thank-you to donor ({collegeName}).
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <RecordDonationForm vendorId={vendorId} branchId={branchId} />
+              <RecordDonationForm
+                vendorId={resolvedVendorId}
+                branchId={branchId}
+                collegeName={collegeName}
+              />
             </CardContent>
           </Card>
         ) : null}
@@ -68,6 +81,7 @@ export default async function DonationsPage() {
                     <p className="font-medium">{d.donor_name}</p>
                     <p className="text-xs text-[#5a6f65]">
                       {formatDate(d.created_at)} · {d.type}
+                      {d.donor_phone ? ` · ${d.donor_phone}` : ""}
                     </p>
                   </div>
                   <div className="text-right">

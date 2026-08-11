@@ -25,6 +25,11 @@ const bulkStudentSmsSchema = z.object({
   studentIds: z.array(z.string().uuid()).min(1).max(400),
 });
 
+const bulkStaffSmsSchema = z.object({
+  message: z.string().trim().min(1, "Message is required").max(1000),
+  staffIds: z.array(z.string().uuid()).min(1).max(400),
+});
+
 const BULK_CHUNK_SIZE = 50;
 
 export type CustomSmsRecipientResult = {
@@ -37,6 +42,14 @@ export type CustomSmsRecipientResult = {
 
 export type BulkStudentSmsResult = {
   studentId: string;
+  name: string;
+  phone: string;
+  status: "sent" | "failed" | "skipped";
+  error?: string;
+};
+
+export type BulkStaffSmsResult = {
+  staffId: string;
   name: string;
   phone: string;
   status: "sent" | "failed" | "skipped";
@@ -320,6 +333,181 @@ export async function sendBulkStudentSmsAction(input: {
     };
   } catch (err) {
     console.error("[sendBulkStudentSmsAction]", err);
+    return {
+      error: err instanceof Error ? err.message : "Failed to send SMS",
+    };
+  }
+}
+
+export async function sendBulkStaffSmsAction(input: {
+  message: string;
+  staffIds: string[];
+}) {
+  try {
+    const auth = await requireProfile();
+    if ("error" in auth) return { error: auth.error };
+
+    if (!canSendSms(auth.profile.role)) {
+      return { error: "Forbidden" };
+    }
+
+    const parsed = bulkStaffSmsSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        error: parsed.error.issues.map((i) => i.message).join("; "),
+      };
+    }
+
+    if (!isDialogSmsConfigured()) {
+      return {
+        error:
+          "Dialog SMS is not configured. Add DIALOG_SMS credentials in the environment.",
+      };
+    }
+
+    const { message, staffIds } = parsed.data;
+    const uniqueIds = [...new Set(staffIds)];
+
+    let staffQ = auth.supabase
+      .from("staff_members")
+      .select("id, full_name, phone, status")
+      .in("id", uniqueIds)
+      .eq("status", "active");
+
+    if (auth.profile.vendor_id) {
+      staffQ = staffQ.eq("vendor_id", auth.profile.vendor_id);
+    }
+    if (auth.profile.branch_id) {
+      staffQ = staffQ.eq("branch_id", auth.profile.branch_id);
+    }
+
+    const { data: staffRows, error: staffError } = await staffQ;
+    if (staffError) {
+      return { error: staffError.message };
+    }
+
+    const byId = new Map((staffRows ?? []).map((s) => [s.id, s]));
+    const results: BulkStaffSmsResult[] = [];
+    const toSend: { staffId: string; name: string; phone: string }[] = [];
+
+    for (const id of uniqueIds) {
+      const member = byId.get(id);
+      if (!member) {
+        results.push({
+          staffId: id,
+          name: "Unknown",
+          phone: "",
+          status: "skipped",
+          error: "Staff member not found or not in your branch",
+        });
+        continue;
+      }
+
+      const phone = (member.phone || "").trim();
+      if (!phone) {
+        results.push({
+          staffId: member.id,
+          name: member.full_name,
+          phone: "",
+          status: "skipped",
+          error: "No phone number",
+        });
+        continue;
+      }
+
+      if (!isValidMobile(phone)) {
+        results.push({
+          staffId: member.id,
+          name: member.full_name,
+          phone,
+          status: "skipped",
+          error: "Invalid phone number",
+        });
+        continue;
+      }
+
+      toSend.push({
+        staffId: member.id,
+        name: member.full_name,
+        phone,
+      });
+    }
+
+    if (toSend.length === 0) {
+      const skipped = results.filter((r) => r.status === "skipped").length;
+      return {
+        ok: false,
+        sent: 0,
+        failed: 0,
+        skipped,
+        results,
+        mask: dialogSmsMask(),
+        message: "No staff with valid phone numbers to send to",
+        resultDesc: undefined as string | undefined,
+      };
+    }
+
+    let allOk = true;
+    let lastResultDesc: string | undefined;
+    let lastError: string | undefined;
+
+    for (let i = 0; i < toSend.length; i += BULK_CHUNK_SIZE) {
+      const chunk = toSend.slice(i, i + BULK_CHUNK_SIZE);
+      const api = await sendDialogSmsBulk({
+        to: chunk.map((r) => toWhatsAppMsIsdn(r.phone)),
+        message,
+        vendorId: auth.profile.vendor_id,
+        purpose: "bulk_staff_sms",
+      });
+
+      const resultDesc =
+        api.response &&
+        typeof api.response === "object" &&
+        "resultDesc" in api.response
+          ? String((api.response as { resultDesc?: unknown }).resultDesc ?? "")
+          : undefined;
+      if (resultDesc) lastResultDesc = resultDesc;
+      if (!api.ok) {
+        allOk = false;
+        lastError = api.error || resultDesc || "Failed";
+      }
+
+      for (const recipient of chunk) {
+        results.push({
+          staffId: recipient.staffId,
+          name: recipient.name,
+          phone: recipient.phone,
+          status: api.ok ? "sent" : "failed",
+          error: api.ok ? undefined : api.error || resultDesc || "Failed",
+        });
+      }
+    }
+
+    const sent = results.filter((r) => r.status === "sent").length;
+    const failed = results.filter((r) => r.status === "failed").length;
+    const skipped = results.filter((r) => r.status === "skipped").length;
+
+    const parts = [
+      `Sent ${sent}`,
+      failed ? `failed ${failed}` : null,
+      skipped ? `skipped ${skipped}` : null,
+    ].filter(Boolean);
+
+    return {
+      ok: allOk && sent > 0,
+      sent,
+      failed,
+      skipped,
+      results,
+      mask: dialogSmsMask(),
+      resultDesc: lastResultDesc,
+      message: allOk
+        ? `Dialog SUCCESS — ${parts.join(", ")} (mask ${dialogSmsMask()})`
+        : lastError ||
+          `Dialog rejected the send${lastResultDesc ? `: ${lastResultDesc}` : ""} · ${parts.join(", ")}`,
+    };
+  } catch (err) {
+    console.error("[sendBulkStaffSmsAction]", err);
     return {
       error: err instanceof Error ? err.message : "Failed to send SMS",
     };
