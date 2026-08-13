@@ -138,7 +138,9 @@ export function StudentProfileClient({
         >
           <p className="font-medium">This student has left the madarasa.</p>
           <p className="mt-1 text-rose-900/80">
-            Shown in rose on student lists. Reactivate below if they return.
+            Shown in rose on student lists. Use{" "}
+            <span className="font-medium">Make active / Reactivate</span> below
+            if they return.
           </p>
         </div>
       ) : null}
@@ -148,6 +150,9 @@ export function StudentProfileClient({
           className="rounded-xl border border-sky-300 bg-sky-50 px-4 py-3 text-sm text-sky-950"
         >
           <p className="font-medium">This student has graduated.</p>
+          <p className="mt-1 text-sky-900/80">
+            You can make them active again below if needed.
+          </p>
         </div>
       ) : null}
 
@@ -156,18 +161,21 @@ export function StudentProfileClient({
           className={
             student.status === "left"
               ? "border-rose-300 bg-rose-50/40"
-              : undefined
+              : student.status === "graduated"
+                ? "border-sky-300 bg-sky-50/40"
+                : undefined
           }
         >
           <CardHeader>
             <CardTitle>Madarasa status</CardTitle>
             <CardDescription>
-              Mark students who leave. Left students stay in records with a
-              different colour.
+              Mark students who leave or graduate. Left / graduated students
+              stay in records with a different colour. Admin and Data entry can
+              reactivate.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-            {student.status !== "left" ? (
+            {student.status === "active" ? (
               <Button
                 type="button"
                 variant="outline"
@@ -198,7 +206,8 @@ export function StudentProfileClient({
               >
                 Mark as left
               </Button>
-            ) : (
+            ) : null}
+            {student.status === "left" || student.status === "graduated" ? (
               <Button
                 type="button"
                 className="bg-[#0b3d2e]"
@@ -213,15 +222,15 @@ export function StudentProfileClient({
                     setMessage(
                       result.error
                         ? result.error
-                        : "Student reactivated",
+                        : "Student reactivated — now active again",
                     );
                     if (!result.error) router.refresh();
                   });
                 }}
               >
-                Reactivate student
+                Make active / Reactivate
               </Button>
-            )}
+            ) : null}
             {student.status !== "graduated" ? (
               <Button
                 type="button"
@@ -266,8 +275,8 @@ export function StudentProfileClient({
             <StatusBadge value={student.status} />
           </div>
           <p className="text-xs text-[#5a6f65]">
-            Only Admin can edit profiles, mark left, or change fee plans.
-            Section/class can be changed below by Admin or Data entry.
+            Admin or Data entry can edit profiles, mark left, or reactivate
+            students. Section/class can be changed below when you have access.
           </p>
         </div>
       )}

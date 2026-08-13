@@ -1,5 +1,7 @@
 /** Shared phone helpers for SMS / WhatsApp click-to-chat. */
 
+import { feeReminderSmsMessage } from "@/lib/sms/templates";
+
 /** Digits only, Sri Lanka-aware (0XXXXXXXXX → 94XXXXXXXXX). */
 export function toWhatsAppMsIsdn(phone: string): string {
   let p = phone.replace(/\D/g, "");
@@ -24,5 +26,5 @@ export function feeReminderMessage(opts: {
   amount: string;
   period: string;
 }): string {
-  return `Madarasa fee reminder: ${opts.studentName} has ${opts.amount} outstanding for ${opts.period}. Please settle at the office.`;
+  return feeReminderSmsMessage(opts);
 }

@@ -18,6 +18,7 @@ import {
   feeReminderMessage,
   isValidMobile,
 } from "@/lib/phone";
+import { paymentApprovedSmsMessage } from "@/lib/sms/templates";
 import {
   isWhatsAppApiConfigured,
   sendAbsenceAlertWhatsApp,
@@ -81,7 +82,10 @@ export async function notifyPaymentConfirmation(opts: {
   if (ch.has("sms")) {
     results.sms = await sendDialogSms({
       to: opts.to,
-      message: `Madarasa: Payment of ${opts.amount} for ${opts.studentName} has been approved. JazakAllah khair.`,
+      message: paymentApprovedSmsMessage({
+        studentName: opts.studentName,
+        amount: opts.amount,
+      }),
       vendorId: opts.vendorId,
       studentId: opts.studentId,
       purpose: "payment_confirmation",

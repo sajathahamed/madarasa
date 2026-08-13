@@ -16,17 +16,17 @@ const recipientSchema = z.object({
 });
 
 const customSmsSchema = z.object({
-  message: z.string().trim().min(1, "Message is required").max(1000),
+  message: z.string().trim().min(1, "Message is required").max(1500),
   recipients: z.array(recipientSchema).min(1).max(50),
 });
 
 const bulkStudentSmsSchema = z.object({
-  message: z.string().trim().min(1, "Message is required").max(1000),
+  message: z.string().trim().min(1, "Message is required").max(1500),
   studentIds: z.array(z.string().uuid()).min(1).max(400),
 });
 
 const bulkStaffSmsSchema = z.object({
-  message: z.string().trim().min(1, "Message is required").max(1000),
+  message: z.string().trim().min(1, "Message is required").max(1500),
   staffIds: z.array(z.string().uuid()).min(1).max(400),
 });
 

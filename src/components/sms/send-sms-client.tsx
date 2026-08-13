@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { classDisplayName } from "@/lib/academic-sections";
+import { defaultBulkSmsTemplate } from "@/lib/sms/templates";
 import type { AcademicSection } from "@/types/database";
 
 type RecipientRow = { id: string; name: string; phone: string };
@@ -73,7 +74,7 @@ export function SendSmsClient({
 }) {
   const [mode, setMode] = useState<SmsMode>("students");
   const [recipients, setRecipients] = useState<RecipientRow[]>([newRow()]);
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(() => defaultBulkSmsTemplate());
   const [search, setSearch] = useState("");
   const [classFilter, setClassFilter] = useState<string>("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -603,19 +604,31 @@ export function SendSmsClient({
       ) : null}
 
       <div className="space-y-1">
-        <Label htmlFor="sms-message">Message</Label>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Label htmlFor="sms-message">Message (English + Tamil)</Label>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={pending}
+            onClick={() => setMessage(defaultBulkSmsTemplate())}
+          >
+            Reset bilingual template
+          </Button>
+        </div>
         <Textarea
           id="sms-message"
           value={message}
           onChange={(e) => setMessage(e.target.value)}
-          placeholder="Type the SMS text to send…"
+          placeholder="Assalamu Alaikkum Warahmathullahi Wabarakathuhu …"
           required
-          maxLength={1000}
-          rows={5}
+          maxLength={1500}
+          rows={8}
           disabled={pending}
         />
         <p className="text-xs text-[#5a6f65]">
-          Same message is sent to every recipient · {message.length}/1000
+          Starts with Islamic greeting · include English and Tamil ·{" "}
+          {message.length}/1500
         </p>
       </div>
 

@@ -18,6 +18,16 @@ export type IslamicStream = "qaida" | "nazirah" | "hifz";
 export type HifzComponent = "sabaq" | "sabqi" | "manzil" | "juz";
 export type StudentStatus = "active" | "left" | "graduated";
 export type AcademicSection = "hifz" | "sariya";
+export type ExpenseCategory =
+  | "salary"
+  | "utilities"
+  | "food_kitchen"
+  | "maintenance"
+  | "books_stationery"
+  | "transport"
+  | "charity_zakat"
+  | "miscellaneous";
+export type ExpensePaymentMethod = "cash" | "bank";
 
 export type Json =
   | string
@@ -970,6 +980,87 @@ type Tables = {
     };
     Relationships: [];
   };
+  expenses: {
+    Row: {
+      id: string;
+      vendor_id: string;
+      branch_id: string;
+      category: ExpenseCategory;
+      title: string;
+      amount: number;
+      expense_date: string;
+      payee: string | null;
+      payment_method: ExpensePaymentMethod;
+      notes: string | null;
+      created_by: string;
+      created_at: string;
+    };
+    Insert: {
+      id?: string;
+      vendor_id: string;
+      branch_id: string;
+      category: ExpenseCategory;
+      title: string;
+      amount: number;
+      expense_date?: string;
+      payee?: string | null;
+      payment_method?: ExpensePaymentMethod;
+      notes?: string | null;
+      created_by: string;
+      created_at?: string;
+    };
+    Update: {
+      id?: string;
+      vendor_id?: string;
+      branch_id?: string;
+      category?: ExpenseCategory;
+      title?: string;
+      amount?: number;
+      expense_date?: string;
+      payee?: string | null;
+      payment_method?: ExpensePaymentMethod;
+      notes?: string | null;
+      created_by?: string;
+      created_at?: string;
+    };
+    Relationships: [];
+  };
+  fee_cash_outs: {
+    Row: {
+      id: string;
+      vendor_id: string;
+      branch_id: string;
+      amount: number;
+      reason: string;
+      cashed_out_by: string;
+      cashed_out_at: string;
+      notes: string | null;
+      created_at: string;
+    };
+    Insert: {
+      id?: string;
+      vendor_id: string;
+      branch_id: string;
+      amount: number;
+      reason: string;
+      cashed_out_by: string;
+      cashed_out_at?: string;
+      notes?: string | null;
+      created_at?: string;
+    };
+    Update: {
+      id?: string;
+      vendor_id?: string;
+      branch_id?: string;
+      amount?: number;
+      reason?: string;
+      cashed_out_by?: string;
+      cashed_out_at?: string;
+      notes?: string | null;
+      created_at?: string;
+    };
+    Relationships: [];
+  };
   password_reset_otps: {
     Row: {
       id: string;
@@ -1063,3 +1154,5 @@ export type LibraryBook = Tables["library_books"]["Row"];
 export type LibraryBookType = Tables["library_book_types"]["Row"];
 export type LibraryLoan = Tables["library_loans"]["Row"];
 export type StaffMember = Tables["staff_members"]["Row"];
+export type Expense = Tables["expenses"]["Row"];
+export type FeeCashOut = Tables["fee_cash_outs"]["Row"];

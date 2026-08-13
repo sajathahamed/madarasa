@@ -272,7 +272,11 @@ export async function sendPaymentConfirmSmsAction(opts: {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
-    const defaultMsg = `Madarasa: Payment of ${amountText} for ${student.full_name} has been received. JazakAllah khair.`;
+    const { paymentConfirmSmsMessage } = await import("@/lib/sms/templates");
+    const defaultMsg = paymentConfirmSmsMessage({
+      studentName: student.full_name,
+      amountText,
+    });
     const message = (opts.message || defaultMsg).trim();
     if (!message) return { error: "Message is required" };
 
@@ -430,7 +434,12 @@ export async function sendDonationConfirmSmsAction(opts: {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
-    const defaultMsg = `JazakAllah khair ${donation.donor_name}. Your donation of LKR ${amountText} to ${collegeName} has been received. May Allah reward you.`;
+    const { donationConfirmSmsMessage } = await import("@/lib/sms/templates");
+    const defaultMsg = donationConfirmSmsMessage({
+      donorName: donation.donor_name,
+      amountText,
+      collegeName,
+    });
     const message = (opts.message || defaultMsg).trim();
     if (!message) return { error: "Message is required" };
 

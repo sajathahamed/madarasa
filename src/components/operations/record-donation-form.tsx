@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatMoney } from "@/lib/format";
+import { donationConfirmSmsMessage } from "@/lib/sms/templates";
 
 type SmsOffer = {
   donationId: string;
@@ -89,7 +90,11 @@ export function RecordDonationForm({
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               });
-              const defaultMessage = `JazakAllah khair ${donorName}. Your donation of LKR ${amountText} to ${college} has been received. May Allah reward you.`;
+              const defaultMessage = donationConfirmSmsMessage({
+                donorName,
+                amountText,
+                collegeName: college,
+              });
               setSmsOffer({
                 donationId: result.donationId,
                 donorName,
@@ -185,12 +190,12 @@ export function RecordDonationForm({
             </p>
           </div>
           <div className="space-y-1">
-            <Label htmlFor="donation_sms_msg">Message</Label>
+            <Label htmlFor="donation_sms_msg">Message (EN + TA)</Label>
             <textarea
               id="donation_sms_msg"
               value={smsText}
               onChange={(e) => setSmsText(e.target.value)}
-              rows={3}
+              rows={7}
               className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
             />
           </div>

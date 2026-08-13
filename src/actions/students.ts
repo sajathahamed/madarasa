@@ -96,7 +96,9 @@ export async function updateStudentAction(
   }
 }
 
-/** Mark student as left / reactivate / graduated from madarasa. */
+/** Mark student as left / reactivate (make active) / graduated from madarasa.
+ * Reactivate sets status=active only; re-enroll in a class separately if needed.
+ */
 export async function setStudentStatusAction(opts: {
   studentId: string;
   status: "active" | "left" | "graduated";

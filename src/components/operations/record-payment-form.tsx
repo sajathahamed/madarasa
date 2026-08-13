@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { formatDate, formatMoney, formatPendingMonths } from "@/lib/format";
+import { paymentConfirmSmsMessage } from "@/lib/sms/templates";
 
 type Student = {
   id: string;
@@ -149,7 +150,13 @@ export function RecordPaymentForm({
               students.find((s) => s.id === selectedId)?.guardian_phone ||
               "";
             if (phone) {
-              const defaultMessage = `Madarasa: Payment of ${formatMoney(amount)} for ${selectedName} has been received. JazakAllah khair.`;
+              const defaultMessage = paymentConfirmSmsMessage({
+                studentName: selectedName,
+                amountText: Number(amount).toLocaleString("en-LK", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                }),
+              });
               setSmsOffer({
                 studentId: selectedId,
                 studentName: selectedName,
@@ -361,12 +368,12 @@ export function RecordPaymentForm({
             </p>
           </div>
           <div className="space-y-1">
-            <Label htmlFor="payment_sms_msg">Message</Label>
+            <Label htmlFor="payment_sms_msg">Message (EN + TA)</Label>
             <textarea
               id="payment_sms_msg"
               value={smsText}
               onChange={(e) => setSmsText(e.target.value)}
-              rows={3}
+              rows={7}
               className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
             />
           </div>
