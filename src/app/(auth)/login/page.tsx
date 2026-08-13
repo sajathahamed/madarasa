@@ -39,24 +39,28 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [resetPhone, setResetPhone] = useState("");
+  const [resetEmail, setResetEmail] = useState("");
+  const [needsEmail, setNeedsEmail] = useState(false);
   const [resetId, setResetId] = useState<string | null>(null);
   const [maskedPhone, setMaskedPhone] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const resetForgotState = () => {
     setError(null);
-    setInfo(null);
     setResetId(null);
     setMaskedPhone(null);
+    setNeedsEmail(false);
   };
 
-  const goLogin = () => {
+  const goLogin = (successMessage?: string | null) => {
     resetForgotState();
+    setInfo(successMessage ?? null);
     setView("login");
   };
 
   const goForgot = () => {
     resetForgotState();
+    setInfo(null);
     setView("forgot-phone");
   };
 
@@ -169,12 +173,14 @@ export default function LoginPage() {
           {view === "login"
             ? "Welcome back — enter your staff credentials to continue."
             : view === "forgot-phone"
-              ? "Enter the phone number on your login profile. We will SMS a one-time code if it matches an account."
+              ? needsEmail
+                ? "This phone is shared by more than one account. Enter your login email to continue."
+                : "Enter the phone number on your login profile. We will SMS a one-time code if it matches an account."
               : view === "forgot-otp"
                 ? maskedPhone
                   ? `Enter the 6-digit code sent to ${maskedPhone}.`
                   : "Enter the 6-digit code from the SMS."
-                : "Choose a new password for your account."}
+                : "Choose a new password. Afterward, sign in with your email and this new password."}
         </p>
         <p
           className="mt-2 hidden text-right text-lg text-[#0b3d2e]/80 lg:block"
@@ -242,6 +248,11 @@ export default function LoginPage() {
                 {error}
               </p>
             ) : null}
+            {info ? (
+              <p className="text-sm text-[#0b3d2e]" role="status">
+                {info}
+              </p>
+            ) : null}
             <Button
               type="submit"
               disabled={pending}
@@ -259,23 +270,36 @@ export default function LoginPage() {
               e.preventDefault();
               const formData = new FormData(e.currentTarget);
               const phone = String(formData.get("phone") ?? "").trim();
+              const email = String(formData.get("email") ?? "").trim();
               setError(null);
               setInfo(null);
               setResetPhone(phone);
+              setResetEmail(email);
               startTransition(async () => {
-                const result = await requestPasswordResetOtpAction({ phone });
+                const result = await requestPasswordResetOtpAction({
+                  phone,
+                  email: email || undefined,
+                });
                 if ("error" in result) {
                   setError(result.error);
                   return;
                 }
+                if (result.needsEmail) {
+                  setNeedsEmail(true);
+                  setInfo(result.message);
+                  return;
+                }
                 if (result.resetId) {
+                  setNeedsEmail(false);
                   setResetId(result.resetId);
                   setMaskedPhone(result.maskedPhone ?? null);
                   setInfo(result.message);
                   setView("forgot-otp");
                   return;
                 }
-                setError(result.message || "No account found for that phone number.");
+                setError(
+                  result.message || "No account found for that phone number.",
+                );
               });
             }}
           >
@@ -293,6 +317,21 @@ export default function LoginPage() {
                 className="h-12 rounded-xl border-[#0b3d2e]/15 bg-white"
               />
             </div>
+            {needsEmail ? (
+              <div className="space-y-2">
+                <Label htmlFor="reset-email">Login email</Label>
+                <Input
+                  id="reset-email"
+                  name="email"
+                  type="email"
+                  required
+                  autoComplete="email"
+                  placeholder="you@example.com"
+                  defaultValue={resetEmail}
+                  className="h-12 rounded-xl border-[#0b3d2e]/15 bg-white"
+                />
+              </div>
+            ) : null}
             {error ? (
               <p className="text-sm text-red-700" role="alert">
                 {error}
@@ -308,12 +347,16 @@ export default function LoginPage() {
               disabled={pending}
               className="h-12 w-full rounded-xl bg-[#0b3d2e] text-base hover:bg-[#0f4f3b]"
             >
-              {pending ? "Sending OTP…" : "Send OTP by SMS"}
+              {pending
+                ? "Sending OTP…"
+                : needsEmail
+                  ? "Send OTP for this email"
+                  : "Send OTP by SMS"}
             </Button>
             <button
               type="button"
               className="w-full text-sm text-[#5a6f65] underline-offset-2 hover:underline"
-              onClick={goLogin}
+              onClick={() => goLogin()}
               disabled={pending}
             >
               Back to sign in
@@ -410,11 +453,7 @@ export default function LoginPage() {
                   setError(result.error);
                   return;
                 }
-                setInfo(result.message);
-                setTimeout(() => {
-                  goLogin();
-                  setInfo(result.message);
-                }, 400);
+                goLogin(result.message);
               });
             }}
           >
@@ -462,7 +501,7 @@ export default function LoginPage() {
             <button
               type="button"
               className="w-full text-sm text-[#5a6f65] underline-offset-2 hover:underline"
-              onClick={goLogin}
+              onClick={() => goLogin()}
               disabled={pending}
             >
               Back to sign in

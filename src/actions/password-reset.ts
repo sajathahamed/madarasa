@@ -34,6 +34,14 @@ const requestSchema = z.object({
     .trim()
     .min(9, "Enter a valid phone number")
     .refine((v) => isValidMobile(v), "Enter a valid phone number"),
+  email: z
+    .string()
+    .trim()
+    .optional()
+    .refine(
+      (v) => !v || z.string().email().safeParse(v).success,
+      "Enter a valid login email",
+    ),
 });
 
 const verifySchema = z.object({
@@ -59,11 +67,18 @@ export type PasswordResetRequestResult =
       resetId?: string;
       maskedPhone?: string;
       message: string;
+      needsEmail?: false;
+    }
+  | {
+      ok: true;
+      needsEmail: true;
+      message: string;
     }
   | { error: string };
 
 export async function requestPasswordResetOtpAction(input: {
   phone: string;
+  email?: string;
 }): Promise<PasswordResetRequestResult> {
   try {
     const parsed = requestSchema.safeParse(input);
@@ -93,39 +108,64 @@ export async function requestPasswordResetOtpAction(input: {
 
     const rawPhone = parsed.data.phone.trim();
     const normalizedPhone = toWhatsAppMsIsdn(rawPhone);
+    const emailHint = (parsed.data.email || "").trim().toLowerCase();
 
-    const { data: lookupRows, error: lookupError } = await admin.rpc(
-      "lookup_app_user_by_phone",
-      { p_phone: rawPhone },
+    const matches = await resolvePhoneMatches(
+      admin,
+      rawPhone,
+      normalizedPhone,
     );
-
-    if (lookupError) {
-      console.error("[requestPasswordResetOtp] lookup", lookupError);
-      // Fallback: app-level scan if RPC is not applied yet
-      const fallback = await lookupAppUserByPhoneFallback(admin, normalizedPhone);
-      if (fallback.error) {
-        return { error: fallback.error };
-      }
-      if (!fallback.user) {
-        return await phoneNotFoundResult(admin, rawPhone, normalizedPhone);
-      }
-      return await issueOtp(admin, fallback.user, normalizedPhone);
+    if (matches.error) {
+      return { error: matches.error };
     }
 
-    const authUser = (
-      Array.isArray(lookupRows) ? lookupRows[0] : null
-    ) as PhoneLookupRow | null;
-
-    if (!authUser?.id) {
+    if (matches.users.length === 0) {
       return await phoneNotFoundResult(admin, rawPhone, normalizedPhone);
+    }
+
+    if (matches.users.length > 1 && !emailHint) {
+      return {
+        ok: true,
+        needsEmail: true,
+        message:
+          "Several login accounts share this phone. Enter the email you use to sign in, then request the OTP again.",
+      };
+    }
+
+    let selected = matches.users[0];
+    if (matches.users.length > 1) {
+      const filtered = matches.users.filter(
+        (u) => (u.email || "").toLowerCase() === emailHint,
+      );
+      if (filtered.length === 0) {
+        return {
+          error:
+            "That email is not linked to this phone number. Use the email from your login profile.",
+        };
+      }
+      if (filtered.length > 1) {
+        return {
+          error:
+            "Multiple accounts matched. Contact an administrator to reset your password.",
+        };
+      }
+      selected = filtered[0];
+    } else if (emailHint) {
+      const email = (selected.email || "").toLowerCase();
+      if (email && email !== emailHint) {
+        return {
+          error:
+            "That email does not match the account for this phone number.",
+        };
+      }
     }
 
     return await issueOtp(
       admin,
       {
-        id: authUser.id,
-        email: authUser.email,
-        phone: authUser.phone || normalizedPhone,
+        id: selected.id,
+        email: selected.email,
+        phone: selected.phone || normalizedPhone,
       },
       normalizedPhone,
     );
@@ -137,11 +177,47 @@ export async function requestPasswordResetOtpAction(input: {
   }
 }
 
+async function resolvePhoneMatches(
+  admin: ReturnType<typeof createAdminClient>,
+  rawPhone: string,
+  normalizedPhone: string,
+): Promise<{ users: PhoneLookupRow[]; error?: string }> {
+  const { data: lookupRows, error: lookupError } = await admin.rpc(
+    "lookup_app_user_by_phone",
+    { p_phone: rawPhone },
+  );
+
+  if (lookupError) {
+    console.error("[requestPasswordResetOtp] lookup", lookupError);
+    const fallback = await lookupAppUsersByPhoneFallback(
+      admin,
+      normalizedPhone,
+    );
+    if (fallback.error) {
+      return { users: [], error: fallback.error };
+    }
+    return { users: fallback.users };
+  }
+
+  const rows = (Array.isArray(lookupRows) ? lookupRows : []) as PhoneLookupRow[];
+  return {
+    users: rows.filter((r) => Boolean(r?.id)),
+  };
+}
+
 async function phoneNotFoundResult(
   admin: ReturnType<typeof createAdminClient>,
   rawPhone: string,
   normalizedPhone: string,
 ): Promise<PasswordResetRequestResult> {
+  const inactive = await findInactiveAppUserByPhone(admin, normalizedPhone);
+  if (inactive) {
+    return {
+      error:
+        "This account is inactive. Ask an administrator to reactivate it before resetting the password.",
+    };
+  }
+
   const { data: staffExists, error: staffError } = await admin.rpc(
     "staff_phone_exists",
     { p_phone: rawPhone },
@@ -210,6 +286,30 @@ async function issueOtp(
     email = authUser.user.email.toLowerCase();
   }
 
+  const { data: profile, error: profileError } = await admin
+    .from("app_users")
+    .select("id, status")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profileError) {
+    return { error: profileError.message };
+  }
+  if (!profile) {
+    return {
+      error: "Login profile is missing. Contact an administrator.",
+    };
+  }
+  if (profile.status !== "active") {
+    return {
+      error:
+        "This account is inactive. Ask an administrator to reactivate it before resetting the password.",
+    };
+  }
+  if (profile.id !== user.id) {
+    return { error: "Account identity mismatch. Contact an administrator." };
+  }
+
   const code = generateOtp();
   const expiresAt = new Date(Date.now() + OTP_TTL_MS).toISOString();
   const sendTo = user.phone || normalizedPhone;
@@ -255,12 +355,12 @@ async function issueOtp(
   };
 }
 
-async function lookupAppUserByPhoneFallback(
+async function lookupAppUsersByPhoneFallback(
   admin: ReturnType<typeof createAdminClient>,
   normalizedPhone: string,
 ): Promise<
-  | { user: { id: string; email: string | null; phone: string }; error?: never }
-  | { user: null; error?: string }
+  | { users: PhoneLookupRow[]; error?: never }
+  | { users: []; error: string }
 > {
   const { data: rows, error } = await admin
     .from("app_users")
@@ -271,26 +371,54 @@ async function lookupAppUserByPhoneFallback(
 
   if (error) {
     console.error("[requestPasswordResetOtp] fallback lookup", error);
-    return { user: null, error: "Unable to process reset request right now" };
+    return { users: [], error: "Unable to process reset request right now" };
   }
 
+  const users: PhoneLookupRow[] = [];
   for (const row of rows ?? []) {
     const candidates = [row.phone, row.whatsapp_number];
     for (const raw of candidates) {
       if (!raw) continue;
       if (toWhatsAppMsIsdn(raw) === normalizedPhone) {
-        return {
-          user: {
-            id: row.id,
-            email: null,
-            phone: toWhatsAppMsIsdn(raw),
-          },
-        };
+        users.push({
+          id: row.id,
+          email: null,
+          phone: toWhatsAppMsIsdn(raw),
+        });
+        break;
       }
     }
   }
 
-  return { user: null };
+  // Enrich emails from auth when possible
+  for (const user of users) {
+    if (user.email) continue;
+    const { data: authUser } = await admin.auth.admin.getUserById(user.id);
+    user.email = authUser.user?.email ?? null;
+  }
+
+  return { users };
+}
+
+async function findInactiveAppUserByPhone(
+  admin: ReturnType<typeof createAdminClient>,
+  normalizedPhone: string,
+): Promise<boolean> {
+  const { data: rows } = await admin
+    .from("app_users")
+    .select("id, phone, whatsapp_number, status")
+    .neq("status", "active")
+    .or("phone.not.is.null,whatsapp_number.not.is.null")
+    .limit(500);
+
+  for (const row of rows ?? []) {
+    for (const raw of [row.phone, row.whatsapp_number]) {
+      if (raw && toWhatsAppMsIsdn(raw) === normalizedPhone) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 async function staffPhoneExistsFallback(
@@ -328,7 +456,16 @@ export async function verifyPasswordResetOtpAction(input: {
       };
     }
 
-    const admin = createAdminClient();
+    let admin: ReturnType<typeof createAdminClient>;
+    try {
+      admin = createAdminClient();
+    } catch {
+      return {
+        error:
+          "Server is missing elevated Supabase credentials. Contact an administrator.",
+      };
+    }
+
     const { data: row, error } = await admin
       .from("password_reset_otps")
       .select("*")
@@ -385,7 +522,7 @@ export async function verifyPasswordResetOtpAction(input: {
 }
 
 export type PasswordResetCompleteResult =
-  | { ok: true; message: string }
+  | { ok: true; message: string; email: string }
   | { error: string };
 
 export async function completePasswordResetAction(input: {
@@ -405,7 +542,16 @@ export async function completePasswordResetAction(input: {
       return { error: "Passwords do not match" };
     }
 
-    const admin = createAdminClient();
+    let admin: ReturnType<typeof createAdminClient>;
+    try {
+      admin = createAdminClient();
+    } catch {
+      return {
+        error:
+          "Server is missing elevated Supabase credentials. Contact an administrator.",
+      };
+    }
+
     const { data: row, error } = await admin
       .from("password_reset_otps")
       .select("*")
@@ -429,19 +575,79 @@ export async function completePasswordResetAction(input: {
       return { error: "Verification expired. Request a new OTP." };
     }
 
-    const { error: updateError } = await admin.auth.admin.updateUserById(
-      row.user_id,
-      { password: parsed.data.password },
-    );
+    const { data: profile, error: profileError } = await admin
+      .from("app_users")
+      .select("id, status")
+      .eq("id", row.user_id)
+      .maybeSingle();
+
+    if (profileError) {
+      return { error: profileError.message };
+    }
+    if (!profile) {
+      return {
+        error: "Login profile is missing for this reset. Contact an administrator.",
+      };
+    }
+    if (profile.id !== row.user_id) {
+      return { error: "Account identity mismatch. Contact an administrator." };
+    }
+    if (profile.status !== "active") {
+      return {
+        error:
+          "This account is inactive. Ask an administrator to reactivate it before signing in.",
+      };
+    }
+
+    const { data: authUser, error: authLookupError } =
+      await admin.auth.admin.getUserById(row.user_id);
+    if (authLookupError || !authUser.user) {
+      return {
+        error:
+          authLookupError?.message ||
+          "Auth user not found for this reset. Contact an administrator.",
+      };
+    }
+
+    const loginEmail = (
+      authUser.user.email ||
+      row.email ||
+      ""
+    ).trim().toLowerCase();
+    if (!loginEmail) {
+      return {
+        error:
+          "Login account is missing an email. Contact an administrator.",
+      };
+    }
+
+    const { data: updated, error: updateError } =
+      await admin.auth.admin.updateUserById(row.user_id, {
+        password: parsed.data.password,
+        email_confirm: true,
+      });
 
     if (updateError) {
+      console.error("[completePasswordReset] updateUserById", updateError);
       return { error: updateError.message };
     }
 
-    await admin
+    if (!updated.user?.id || updated.user.id !== row.user_id) {
+      return {
+        error:
+          "Password update did not confirm for this account. Try again or contact an administrator.",
+      };
+    }
+
+    const { error: consumeError } = await admin
       .from("password_reset_otps")
       .update({ consumed_at: new Date().toISOString() })
       .eq("id", row.id);
+
+    if (consumeError) {
+      console.error("[completePasswordReset] consume", consumeError);
+      // Password was already updated — still tell user they can sign in.
+    }
 
     // Invalidate any other open OTPs for this user
     await admin
@@ -452,7 +658,8 @@ export async function completePasswordResetAction(input: {
 
     return {
       ok: true,
-      message: "Password updated. You can sign in with your new password.",
+      email: loginEmail,
+      message: `Password updated. Sign in with your email (${loginEmail}) and the new password.`,
     };
   } catch (err) {
     console.error("[completePasswordResetAction]", err);
