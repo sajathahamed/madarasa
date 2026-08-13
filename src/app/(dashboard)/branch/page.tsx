@@ -20,7 +20,9 @@ export default async function BranchOverviewPage() {
     .eq("status", "active");
   let duesQ = supabase
     .from("fee_dues")
-    .select("total_due, amount_paid, carried_forward")
+    .select(
+      "total_due_sum:total_due.sum(), amount_paid_sum:amount_paid.sum(), carried_forward_sum:carried_forward.sum(), open_count:id.count()",
+    )
     .neq("status", "paid");
   let pendingQ = supabase
     .from("payments")
@@ -46,19 +48,21 @@ export default async function BranchOverviewPage() {
 
   const [students, duesRes, pending, classes] = await Promise.all([
     studentsQ,
-    duesQ,
+    duesQ.maybeSingle(),
     pendingQ,
     classesQ,
   ]);
 
-  const outstanding = (duesRes.data ?? []).reduce(
-    (s, d) => s + (Number(d.total_due) - Number(d.amount_paid)),
-    0,
-  );
-  const carried = (duesRes.data ?? []).reduce(
-    (s, d) => s + Number(d.carried_forward || 0),
-    0,
-  );
+  const duesSums = duesRes.data as {
+    total_due_sum?: number | string | null;
+    amount_paid_sum?: number | string | null;
+    carried_forward_sum?: number | string | null;
+    open_count?: number | string | null;
+  } | null;
+  const outstanding =
+    Number(duesSums?.total_due_sum ?? 0) - Number(duesSums?.amount_paid_sum ?? 0);
+  const carried = Number(duesSums?.carried_forward_sum ?? 0);
+  const openDuesCount = Number(duesSums?.open_count ?? 0);
 
   const role = profile.role;
   const allLinks = [
@@ -193,7 +197,7 @@ export default async function BranchOverviewPage() {
         />
         <StatCard
           label="Open dues"
-          value={duesRes.data?.length ?? 0}
+          value={openDuesCount}
           hint={formatMoney(outstanding)}
           accent="amber"
         />

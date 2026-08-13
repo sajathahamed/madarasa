@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { NavPendingHint } from "@/components/layout/nav-pending-hint";
+
 export function StatCard({
   label,
   value,
@@ -52,6 +54,7 @@ export function ModuleLink({
   return (
     <Link
       href={href}
+      prefetch
       className="group relative block overflow-hidden rounded-2xl border border-[#0b3d2e]/10 bg-white/75 p-5 shadow-[0_10px_40px_-28px_rgba(11,61,46,0.35)] transition duration-300 hover:-translate-y-0.5 hover:border-[#0b3d2e]/25 hover:bg-white"
     >
       <div className="absolute inset-x-0 top-0 h-0.5 origin-left scale-x-0 bg-[#0b3d2e] transition duration-300 group-hover:scale-x-100" />
@@ -63,7 +66,10 @@ export function ModuleLink({
       </p>
       <p className="mt-1 text-sm text-[#5a6f65]">{description}</p>
       <div className="mt-4 flex items-center justify-between text-sm text-[#0b3d2e]">
-        <span className="underline-offset-4 group-hover:underline">Open</span>
+        <span className="inline-flex items-center gap-1.5 underline-offset-4 group-hover:underline">
+          Open
+          <NavPendingHint />
+        </span>
         {meta ? <span className="text-xs text-[#5a6f65]">{meta}</span> : null}
       </div>
     </Link>

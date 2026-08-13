@@ -1,27 +1,9 @@
-import { Amiri, DM_Sans, Source_Serif_4 } from "next/font/google";
-
 import { logoutAction } from "@/actions/auth";
 import { AppShellNav } from "@/components/layout/app-shell-nav";
 import { Button } from "@/components/ui/button";
 import { roleLabel } from "@/lib/auth/roles";
 import type { VendorBranding } from "@/lib/vendor-branding";
 import type { AppUser } from "@/types/database";
-
-const display = Source_Serif_4({
-  subsets: ["latin"],
-  variable: "--font-display",
-});
-
-const sans = DM_Sans({
-  subsets: ["latin"],
-  variable: "--font-sans",
-});
-
-const arabic = Amiri({
-  subsets: ["arabic", "latin"],
-  weight: ["400", "700"],
-  variable: "--font-arabic",
-});
 
 type NavItem = { href: string; label: string };
 
@@ -45,7 +27,7 @@ export function AppShell({
 
   return (
     <div
-      className={`${display.variable} ${sans.variable} ${arabic.variable} min-h-screen`}
+      className="min-h-screen"
       style={{
         fontFamily: "var(--font-sans), sans-serif",
         background:

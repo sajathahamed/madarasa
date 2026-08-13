@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
 
+import { StudentProfileLink } from "@/components/students/student-profile-link";
 import { StudentSearchInput } from "@/components/students/student-search-input";
 import { formatMoney, formatPendingMonths } from "@/lib/format";
 import { matchesStudentQuery } from "@/lib/student-search";
@@ -38,12 +38,12 @@ export function AtRiskStudentsList({ rows }: { rows: Row[] }) {
             className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#0b3d2e]/10 px-3 py-2"
           >
             <div>
-              <Link
-                href={`/branch/students/${r.student_id}`}
+              <StudentProfileLink
+                studentId={r.student_id}
                 className="underline"
               >
                 {r.name}
-              </Link>
+              </StudentProfileLink>
               {r.admission_no ? (
                 <p className="text-xs text-[#5a6f65]">{r.admission_no}</p>
               ) : null}

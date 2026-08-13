@@ -1,10 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Menu } from "lucide-react";
 
+import { PendingNavLink } from "@/components/layout/pending-nav-link";
 import {
   Sheet,
   SheetContent,
@@ -42,9 +42,10 @@ export function AppShellNav({ nav }: { nav: NavItem[] }) {
             </SheetHeader>
             <nav className="flex flex-col gap-1 overflow-y-auto p-3 pb-8">
               {nav.map((item) => (
-                <Link
+                <PendingNavLink
                   key={item.href}
                   href={item.href}
+                  prefetch
                   onClick={() => setOpen(false)}
                   className={`min-h-12 rounded-xl px-4 py-3 text-base transition ${
                     isActive(item.href)
@@ -53,7 +54,7 @@ export function AppShellNav({ nav }: { nav: NavItem[] }) {
                   }`}
                 >
                   {item.label}
-                </Link>
+                </PendingNavLink>
               ))}
             </nav>
           </SheetContent>
@@ -62,9 +63,10 @@ export function AppShellNav({ nav }: { nav: NavItem[] }) {
 
       <nav className="mx-auto hidden max-w-6xl gap-1 overflow-x-auto px-4 pb-3 md:flex md:px-6">
         {nav.map((item) => (
-          <Link
+          <PendingNavLink
             key={item.href}
             href={item.href}
+            prefetch
             className={`whitespace-nowrap rounded-full px-4 py-2.5 text-sm transition ${
               isActive(item.href)
                 ? "bg-[#0b3d2e] text-white"
@@ -72,7 +74,7 @@ export function AppShellNav({ nav }: { nav: NavItem[] }) {
             }`}
           >
             {item.label}
-          </Link>
+          </PendingNavLink>
         ))}
       </nav>
     </>

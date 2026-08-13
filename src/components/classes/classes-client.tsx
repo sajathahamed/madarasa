@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 import { createClassAction, enrollStudentAction } from "@/actions/attendance";
+import { StudentProfileLink } from "@/components/students/student-profile-link";
 import { StudentSearchInput } from "@/components/students/student-search-input";
 import { StudentSearchSelect } from "@/components/students/student-search-select";
 import { Button } from "@/components/ui/button";
@@ -288,12 +289,12 @@ export function ClassesClient({
                 <ul className="mt-3 space-y-1 text-sm">
                   {members.map((m) => (
                     <li key={m.id}>
-                      <Link
-                        href={`/branch/students/${m.student_id}`}
+                      <StudentProfileLink
+                        studentId={m.student_id}
                         className="underline"
                       >
                         {m.student_name || m.student_id.slice(0, 8)}
-                      </Link>
+                      </StudentProfileLink>
                       <span className="text-[#5a6f65]">
                         {" "}
                         (

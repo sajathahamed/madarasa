@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { DM_Sans, Source_Serif_4 } from "next/font/google";
+import { Amiri, DM_Sans, Source_Serif_4 } from "next/font/google";
 
 import { Toaster } from "@/components/ui/sonner";
 
@@ -13,6 +13,12 @@ const sans = DM_Sans({
 const display = Source_Serif_4({
   subsets: ["latin"],
   variable: "--font-display",
+});
+
+const arabic = Amiri({
+  subsets: ["arabic", "latin"],
+  weight: ["400", "700"],
+  variable: "--font-arabic",
 });
 
 export const metadata: Metadata = {
@@ -31,7 +37,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${sans.variable} ${display.variable} h-full antialiased`}
+      className={`${sans.variable} ${display.variable} ${arabic.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col font-sans">
         {children}

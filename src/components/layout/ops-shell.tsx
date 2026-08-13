@@ -1,8 +1,20 @@
+import { cache } from "react";
+
 import { AppShell } from "@/components/layout/app-shell";
 import { opsNav } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { brandingForVendorName } from "@/lib/vendor-branding";
 import type { AppUser } from "@/types/database";
+
+const vendorBranding = cache(async (vendorId: string) => {
+  const supabase = await createClient();
+  const { data: vendor } = await supabase
+    .from("vendors")
+    .select("name")
+    .eq("id", vendorId)
+    .maybeSingle();
+  return brandingForVendorName(vendor?.name);
+});
 
 export async function OpsShell({
   profile,
@@ -15,16 +27,9 @@ export async function OpsShell({
   subtitle?: string;
   children: React.ReactNode;
 }) {
-  let branding = null;
-  if (profile.vendor_id) {
-    const supabase = await createClient();
-    const { data: vendor } = await supabase
-      .from("vendors")
-      .select("name")
-      .eq("id", profile.vendor_id)
-      .maybeSingle();
-    branding = brandingForVendorName(vendor?.name);
-  }
+  const branding = profile.vendor_id
+    ? await vendorBranding(profile.vendor_id)
+    : null;
 
   return (
     <AppShell

@@ -1,3 +1,5 @@
+import { cache } from "react";
+
 import { createClient } from "@/lib/supabase/server";
 import type { AppUser } from "@/types/database";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
@@ -188,7 +190,7 @@ export function opsNav(profile: AppUser) {
   return items;
 }
 
-export async function loadDashboardProfile() {
+export const loadDashboardProfile = cache(async () => {
   const supabase = await createClient();
   const {
     data: { user },
@@ -203,4 +205,4 @@ export async function loadDashboardProfile() {
 
   if (!profile || profile.status !== "active") return null;
   return { supabase, user, profile };
-}
+});

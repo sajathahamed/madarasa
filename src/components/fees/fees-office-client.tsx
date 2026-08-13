@@ -2,9 +2,9 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { toast } from "sonner";
 
+import { StudentProfileLink } from "@/components/students/student-profile-link";
 import {
   generateDuesAction,
   sendBulkFeeRemindersAction,
@@ -369,12 +369,12 @@ export function FeesOfficeClient({
                         }}
                       />
                       <div className="min-w-0 flex-1">
-                        <Link
-                          href={`/branch/students/${d.student_id}`}
+                        <StudentProfileLink
+                          studentId={d.student_id}
                           className="font-medium break-words text-[#0b3d2e] underline"
                         >
                           {d.student_name || d.student_id.slice(0, 8)}
-                        </Link>
+                        </StudentProfileLink>
                         {admission ? (
                           <p className="text-xs text-[#5a6f65]">{admission}</p>
                         ) : null}
@@ -456,12 +456,12 @@ export function FeesOfficeClient({
                   className="flex flex-col gap-1 rounded-lg border border-[#0b3d2e]/10 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="min-w-0">
-                    <Link
-                      href={`/branch/students/${p.student_id}`}
+                    <StudentProfileLink
+                      studentId={p.student_id}
                       className="font-medium text-[#0b3d2e] underline"
                     >
                       {p.student_name || p.student_id.slice(0, 8)}
-                    </Link>
+                    </StudentProfileLink>
                     {p.admission_no ? (
                       <span className="text-xs text-[#5a6f65]">
                         {" "}

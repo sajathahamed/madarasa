@@ -2,6 +2,7 @@ import { FeeCashDrawer } from "@/components/fees/fee-cash-drawer";
 import { FeesOfficeClient } from "@/components/fees/fees-office-client";
 import { OpsShell } from "@/components/layout/ops-shell";
 import { canEnterData } from "@/lib/auth/session";
+import { aggregateSum } from "@/lib/db-aggregate";
 import { requireOpsContext } from "@/lib/ops-page";
 
 export default async function FeesPage() {
@@ -37,52 +38,60 @@ export default async function FeesPage() {
     .neq("status", "paid")
     .order("due_year", { ascending: false })
     .limit(500);
+  // List only what the UI shows (FeesOfficeClient slices to 80).
   let recentPaymentsQ = supabase
     .from("payments")
     .select(
       "id, student_id, amount, status, method, created_at, recorded_by, bank_reference",
     )
     .order("created_at", { ascending: false })
-    .limit(300);
+    .limit(80);
   let branchesQ = supabase
     .from("branches")
     .select("id, vendor_id")
     .order("name");
-  // Cash-on-hand inputs (no invented opening balance):
-  // approved cash payments − fee_cash_outs − cash expenses
-  let cashPaymentsQ = supabase
+  // Cash-on-hand: aggregate in the DB instead of pulling thousands of rows
+  // (API max_rows is 1000, so client-side reduce was also incorrect past that).
+  let cashPaymentsSumQ = supabase
     .from("payments")
-    .select("amount, created_at, status, method")
+    .select("amount.sum()")
     .eq("status", "approved")
-    .eq("method", "cash")
-    .limit(5000);
+    .eq("method", "cash");
   let cashOutsQ = supabase
     .from("fee_cash_outs")
     .select("id, amount, reason, notes, cashed_out_at, cashed_out_by")
     .order("cashed_out_at", { ascending: false })
     .limit(200);
-  let cashExpensesQ = supabase
+  let cashExpensesSumQ = supabase
     .from("expenses")
-    .select("amount")
-    .eq("payment_method", "cash")
-    .limit(5000);
+    .select("amount.sum()")
+    .eq("payment_method", "cash");
+  // Month / today summaries — date-scoped, not derived from the recent list.
+  let monthPaymentsQ = supabase
+    .from("payments")
+    .select("amount, status, created_at")
+    .gte("created_at", monthStart)
+    .lt("created_at", nextMonthStart)
+    .limit(1000);
 
   if (profile.vendor_id) {
     studentsQ = studentsQ.eq("vendor_id", profile.vendor_id);
     duesQ = duesQ.eq("vendor_id", profile.vendor_id);
     recentPaymentsQ = recentPaymentsQ.eq("vendor_id", profile.vendor_id);
     branchesQ = branchesQ.eq("vendor_id", profile.vendor_id);
-    cashPaymentsQ = cashPaymentsQ.eq("vendor_id", profile.vendor_id);
+    cashPaymentsSumQ = cashPaymentsSumQ.eq("vendor_id", profile.vendor_id);
     cashOutsQ = cashOutsQ.eq("vendor_id", profile.vendor_id);
-    cashExpensesQ = cashExpensesQ.eq("vendor_id", profile.vendor_id);
+    cashExpensesSumQ = cashExpensesSumQ.eq("vendor_id", profile.vendor_id);
+    monthPaymentsQ = monthPaymentsQ.eq("vendor_id", profile.vendor_id);
   }
   if (profile.branch_id) {
     studentsQ = studentsQ.eq("branch_id", profile.branch_id);
     duesQ = duesQ.eq("branch_id", profile.branch_id);
     recentPaymentsQ = recentPaymentsQ.eq("branch_id", profile.branch_id);
-    cashPaymentsQ = cashPaymentsQ.eq("branch_id", profile.branch_id);
+    cashPaymentsSumQ = cashPaymentsSumQ.eq("branch_id", profile.branch_id);
     cashOutsQ = cashOutsQ.eq("branch_id", profile.branch_id);
-    cashExpensesQ = cashExpensesQ.eq("branch_id", profile.branch_id);
+    cashExpensesSumQ = cashExpensesSumQ.eq("branch_id", profile.branch_id);
+    monthPaymentsQ = monthPaymentsQ.eq("branch_id", profile.branch_id);
   }
 
   const [
@@ -90,17 +99,19 @@ export default async function FeesPage() {
     { data: dues },
     { data: recentPayments },
     { data: branches },
-    { data: cashPayments },
+    { data: cashPaymentsSum },
     { data: cashOuts },
-    { data: cashExpenses },
+    { data: cashExpensesSum },
+    { data: monthPaymentRows },
   ] = await Promise.all([
     studentsQ,
     duesQ,
     recentPaymentsQ,
     branchesQ,
-    cashPaymentsQ,
+    cashPaymentsSumQ.maybeSingle(),
     cashOutsQ,
-    cashExpensesQ,
+    cashExpensesSumQ.maybeSingle(),
+    monthPaymentsQ,
   ]);
 
   const vendorId = profile.vendor_id || branches?.[0]?.vendor_id || "";
@@ -163,9 +174,7 @@ export default async function FeesPage() {
   );
 
   const payments = recentPayments ?? [];
-  const monthPayments = payments.filter(
-    (p) => p.created_at >= monthStart && p.created_at < nextMonthStart,
-  );
+  const monthPayments = monthPaymentRows ?? [];
   const monthApproved = monthPayments.filter((p) => p.status === "approved");
   const monthPending = monthPayments.filter(
     (p) =>
@@ -175,23 +184,20 @@ export default async function FeesPage() {
     (p) => p.created_at >= todayStart && p.created_at < tomorrowStart,
   );
 
-  // Today’s collections: all approved payments today from the recent list.
   const todayCollectionsFromAllMethods = todayApproved.reduce(
     (s, p) => s + Number(p.amount),
     0,
   );
 
-  const approvedCashTotal = (cashPayments ?? []).reduce(
-    (s, p) => s + Number(p.amount),
-    0,
+  const approvedCashTotal = aggregateSum(
+    cashPaymentsSum as { sum?: number | string | null } | null,
   );
   const cashOutsTotal = (cashOuts ?? []).reduce(
     (s, p) => s + Number(p.amount),
     0,
   );
-  const cashExpensesTotal = (cashExpenses ?? []).reduce(
-    (s, p) => s + Number(p.amount),
-    0,
+  const cashExpensesTotal = aggregateSum(
+    cashExpensesSum as { sum?: number | string | null } | null,
   );
   const cashOnHand = approvedCashTotal - cashOutsTotal - cashExpensesTotal;
 

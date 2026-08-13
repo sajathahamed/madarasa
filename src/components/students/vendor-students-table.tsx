@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-import { StudentSearchInput } from "@/components/students/student-search-input";
 import { EmptyRow } from "@/components/layout/panel-table";
+import { StudentProfileLink } from "@/components/students/student-profile-link";
+import { StudentSearchInput } from "@/components/students/student-search-input";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { formatDate } from "@/lib/format";
 import { matchesStudentQuery } from "@/lib/student-search";
@@ -104,12 +105,12 @@ export function VendorStudentsTable({
                         : "px-3 py-2 font-medium"
                     }
                   >
-                    <Link
-                      href={`/branch/students/${s.id}`}
+                    <StudentProfileLink
+                      studentId={s.id}
                       className="underline"
                     >
                       {s.full_name}
-                    </Link>
+                    </StudentProfileLink>
                   </td>
                   <td className="px-3 py-2">{s.guardian_name}</td>
                   <td className="px-3 py-2">{s.guardian_phone}</td>

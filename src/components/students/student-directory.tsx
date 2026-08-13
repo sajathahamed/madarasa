@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
 
+import { StudentProfileLink } from "@/components/students/student-profile-link";
 import { StudentSearchInput } from "@/components/students/student-search-input";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { sectionBadgeValue, sectionLabel } from "@/lib/academic-sections";
@@ -92,8 +92,8 @@ export function StudentDirectory({ students }: { students: Row[] }) {
                   }
                 >
                   <td className="px-3 py-3">
-                    <Link
-                      href={`/branch/students/${s.id}`}
+                    <StudentProfileLink
+                      studentId={s.id}
                       className={
                         s.status === "left"
                           ? "font-medium text-rose-900 underline"
@@ -101,7 +101,7 @@ export function StudentDirectory({ students }: { students: Row[] }) {
                       }
                     >
                       {s.full_name}
-                    </Link>
+                    </StudentProfileLink>
                     {s.branch_name ? (
                       <p className="text-xs text-[#5a6f65]">{s.branch_name}</p>
                     ) : null}

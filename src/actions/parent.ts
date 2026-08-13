@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { requireProfile } from "@/lib/auth/session";
+import { publicAppPath } from "@/lib/app-url";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const PARENT_COOKIE = "madarasa_parent_session";
@@ -49,12 +50,9 @@ export async function createParentLinkAction(studentId: string) {
 
     if (error) return { error: error.message };
 
-    const base =
-      process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
-      "http://localhost:3000";
     return {
       ok: true as const,
-      url: `${base}/parent?token=${raw}`,
+      url: publicAppPath(`/parent?token=${raw}`),
       token: raw,
     };
   } catch (err) {

@@ -17,14 +17,6 @@ export default async function StudentDetailPage({
   const { id } = await params;
   const { supabase, profile } = await requireOpsContext();
 
-  const { data: student } = await supabase
-    .from("students")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-
-  if (!student) notFound();
-
   let classesQ = supabase
     .from("classes")
     .select("id, name, section, grade")
@@ -34,6 +26,7 @@ export default async function StudentDetailPage({
   if (profile.branch_id) classesQ = classesQ.eq("branch_id", profile.branch_id);
 
   const [
+    { data: student },
     { data: health },
     { data: feePlan },
     { data: dues },
@@ -42,19 +35,30 @@ export default async function StudentDetailPage({
     { data: enrollment },
   ] = await Promise.all([
     supabase
+      .from("students")
+      .select(
+        "id, admission_no, full_name, dob, gender, guardian_name, guardian_phone, address, photo_url, status",
+      )
+      .eq("id", id)
+      .maybeSingle(),
+    supabase
       .from("student_health_info")
-      .select("*")
+      .select(
+        "blood_group, allergies, medical_conditions, current_medications, emergency_contact_name, emergency_contact_phone, notes",
+      )
       .eq("student_id", id)
       .maybeSingle(),
     supabase
       .from("student_fee_plans")
-      .select("*")
+      .select("monthly_amount, is_free, discount_percent")
       .eq("student_id", id)
       .eq("is_current", true)
       .maybeSingle(),
     supabase
       .from("fee_dues")
-      .select("*")
+      .select(
+        "id, due_month, due_year, total_due, amount_paid, status, month_amount, carried_forward",
+      )
       .eq("student_id", id)
       .order("due_year", { ascending: false })
       .order("due_month", { ascending: false })
@@ -73,6 +77,8 @@ export default async function StudentDetailPage({
       .eq("is_active", true)
       .maybeSingle(),
   ]);
+
+  if (!student) notFound();
 
   return (
     <OpsShell profile={profile} title={student.full_name}>
