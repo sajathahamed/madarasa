@@ -88,6 +88,7 @@ export async function notifyPaymentConfirmation(opts: {
       }),
       vendorId: opts.vendorId,
       studentId: opts.studentId,
+      recipientName: opts.studentName,
       purpose: "payment_confirmation",
     });
   }
@@ -103,6 +104,9 @@ export async function notifyPaymentReminder(opts: {
   period: string;
   vendorId?: string | null;
   studentId?: string | null;
+  branchId?: string | null;
+  senderId?: string | null;
+  senderName?: string | null;
   /** Default: both channels. Pass one channel for SMS-only or WhatsApp-only. */
   channel?: ReminderChannel | "both";
 }): Promise<ReminderNotifyResult> {
@@ -144,7 +148,11 @@ export async function notifyPaymentReminder(opts: {
       to: opts.to,
       message: text,
       vendorId: opts.vendorId,
+      branchId: opts.branchId,
+      senderId: opts.senderId,
+      senderName: opts.senderName,
       studentId: opts.studentId,
+      recipientName: opts.studentName,
       purpose: "payment_reminder",
     });
   }
@@ -208,6 +216,7 @@ export async function notifyAbsence(opts: {
       message: text,
       vendorId: opts.vendorId,
       studentId: opts.studentId,
+      recipientName: opts.studentName,
       purpose: "absence_alert",
     });
   }
@@ -237,6 +246,7 @@ export async function notifyProgress(opts: {
       message: text,
       vendorId: opts.vendorId,
       studentId: opts.studentId,
+      recipientName: opts.studentName,
       purpose: "progress_note",
     });
   }

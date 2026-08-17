@@ -533,6 +533,60 @@ type Tables = {
     };
     Relationships: [];
   };
+  sms_messages: {
+    Row: {
+      id: string;
+      vendor_id: string | null;
+      branch_id: string | null;
+      sender_id: string | null;
+      sender_name: string | null;
+      recipient_phone: string;
+      recipient_name: string | null;
+      student_id: string | null;
+      staff_id: string | null;
+      message_body: string;
+      purpose: string;
+      status: string;
+      provider_response: Json | null;
+      sent_at: string | null;
+      created_at: string;
+    };
+    Insert: {
+      id?: string;
+      vendor_id?: string | null;
+      branch_id?: string | null;
+      sender_id?: string | null;
+      sender_name?: string | null;
+      recipient_phone: string;
+      recipient_name?: string | null;
+      student_id?: string | null;
+      staff_id?: string | null;
+      message_body: string;
+      purpose?: string;
+      status?: string;
+      provider_response?: Json | null;
+      sent_at?: string | null;
+      created_at?: string;
+    };
+    Update: {
+      id?: string;
+      vendor_id?: string | null;
+      branch_id?: string | null;
+      sender_id?: string | null;
+      sender_name?: string | null;
+      recipient_phone?: string;
+      recipient_name?: string | null;
+      student_id?: string | null;
+      staff_id?: string | null;
+      message_body?: string;
+      purpose?: string;
+      status?: string;
+      provider_response?: Json | null;
+      sent_at?: string | null;
+      created_at?: string;
+    };
+    Relationships: [];
+  };
   audit_logs: {
     Row: {
       id: string;

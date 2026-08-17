@@ -248,6 +248,9 @@ export async function sendFeeReminderAction(
       period: `${due.due_month}/${due.due_year}`,
       vendorId: due.vendor_id,
       studentId: due.student_id,
+      branchId: auth.profile.branch_id,
+      senderId: auth.profile.id,
+      senderName: auth.profile.full_name,
       channel,
     });
 

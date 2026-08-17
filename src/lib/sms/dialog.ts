@@ -58,16 +58,47 @@ function richCommCredentials() {
   return { username, password };
 }
 
+export type SmsLogMeta = {
+  vendorId?: string | null;
+  branchId?: string | null;
+  senderId?: string | null;
+  senderName?: string | null;
+  recipientName?: string | null;
+  studentId?: string | null;
+  staffId?: string | null;
+  purpose?: string;
+};
+
 async function logSms(opts: {
   to: string;
   body: string;
   status: string;
   response: unknown;
-  vendorId?: string | null;
-  studentId?: string | null;
-  purpose?: string;
-}) {
-  const row = {
+} & SmsLogMeta) {
+  const sentAt = opts.status === "sent" ? new Date().toISOString() : null;
+  const smsRow = {
+    vendor_id: opts.vendorId ?? null,
+    branch_id: opts.branchId ?? null,
+    sender_id: opts.senderId ?? null,
+    sender_name: opts.senderName ?? null,
+    recipient_phone: normalizePhone(opts.to),
+    recipient_name: opts.recipientName ?? null,
+    student_id: opts.studentId ?? null,
+    staff_id: opts.staffId ?? null,
+    message_body: opts.body,
+    purpose: opts.purpose || "message",
+    status: opts.status,
+    provider_response: {
+      channel: "dialog_sms",
+      mode: smsMode(),
+      mask: UPVIEW_TECH_MASK,
+      result: opts.response,
+    } as never,
+    sent_at: sentAt,
+  };
+
+  // Legacy mirror (body kept inside provider_response for older screens)
+  const legacyRow = {
     vendor_id: opts.vendorId ?? null,
     student_id: opts.studentId ?? null,
     recipient_phone: normalizePhone(opts.to),
@@ -79,21 +110,31 @@ async function logSms(opts: {
       mode: smsMode(),
       mask: UPVIEW_TECH_MASK,
       body: opts.body,
+      sender_name: opts.senderName ?? null,
+      recipient_name: opts.recipientName ?? null,
       result: opts.response,
     } as never,
-    sent_at: opts.status === "sent" ? new Date().toISOString() : null,
+    sent_at: sentAt,
   };
 
   try {
     const admin = createAdminClient();
-    await admin.from("whatsapp_messages").insert(row);
+    const [{ error: smsErr }, { error: legacyErr }] = await Promise.all([
+      admin.from("sms_messages").insert(smsRow),
+      admin.from("whatsapp_messages").insert(legacyRow),
+    ]);
+    if (smsErr) console.error("[sms_messages log]", smsErr.message);
+    if (legacyErr) console.error("[whatsapp_messages log]", legacyErr.message);
   } catch {
     try {
       const supabase = await createClient();
-      await supabase.from("whatsapp_messages").insert({
-        ...row,
-        status: "queued",
-      });
+      await Promise.all([
+        supabase.from("sms_messages").insert(smsRow),
+        supabase.from("whatsapp_messages").insert({
+          ...legacyRow,
+          status: "queued",
+        }),
+      ]);
     } catch (err) {
       console.error("[sms log]", err);
     }
@@ -275,13 +316,12 @@ async function sendViaIdeabiz(
   };
 }
 
-export async function sendDialogSms(opts: {
-  to: string;
-  message: string;
-  vendorId?: string | null;
-  studentId?: string | null;
-  purpose?: string;
-}): Promise<SmsResult> {
+export async function sendDialogSms(
+  opts: {
+    to: string;
+    message: string;
+  } & SmsLogMeta,
+): Promise<SmsResult> {
   if (process.env.DIALOG_SMS_ENABLED === "false") {
     return { ok: false, queued: true, error: "Dialog SMS disabled" };
   }
@@ -309,7 +349,12 @@ export async function sendDialogSms(opts: {
     status,
     response: result.response ?? { error: result.error },
     vendorId: opts.vendorId,
+    branchId: opts.branchId,
+    senderId: opts.senderId,
+    senderName: opts.senderName,
+    recipientName: opts.recipientName,
     studentId: opts.studentId,
+    staffId: opts.staffId,
     purpose: opts.purpose,
   });
 
@@ -317,14 +362,16 @@ export async function sendDialogSms(opts: {
 }
 
 /** Bulk SMS via Rich Communication (comma-joined numbers), one API call. */
-export async function sendDialogSmsBulk(opts: {
-  to: string[];
-  message: string;
-  vendorId?: string | null;
-  purpose?: string;
-  /** Parallel to `to` — used when logging SMS against students. */
-  studentIds?: (string | null | undefined)[];
-}): Promise<SmsResult> {
+export async function sendDialogSmsBulk(
+  opts: {
+    to: string[];
+    message: string;
+    /** Parallel to `to` — used when logging SMS against students. */
+    studentIds?: (string | null | undefined)[];
+    staffIds?: (string | null | undefined)[];
+    recipientNames?: (string | null | undefined)[];
+  } & Omit<SmsLogMeta, "studentId" | "staffId" | "recipientName">,
+): Promise<SmsResult> {
   if (process.env.DIALOG_SMS_ENABLED === "false") {
     return { ok: false, queued: true, error: "Dialog SMS disabled" };
   }
@@ -339,7 +386,12 @@ export async function sendDialogSmsBulk(opts: {
         to: opts.to[i],
         message: opts.message,
         vendorId: opts.vendorId,
+        branchId: opts.branchId,
+        senderId: opts.senderId,
+        senderName: opts.senderName,
         studentId: opts.studentIds?.[i] ?? null,
+        staffId: opts.staffIds?.[i] ?? null,
+        recipientName: opts.recipientNames?.[i] ?? null,
         purpose: opts.purpose,
       });
       if (last.ok) okCount++;
@@ -362,7 +414,12 @@ export async function sendDialogSmsBulk(opts: {
         status,
         response: result.response ?? { error: result.error },
         vendorId: opts.vendorId,
+        branchId: opts.branchId,
+        senderId: opts.senderId,
+        senderName: opts.senderName,
         studentId: opts.studentIds?.[i] ?? null,
+        staffId: opts.staffIds?.[i] ?? null,
+        recipientName: opts.recipientNames?.[i] ?? null,
         purpose: opts.purpose || "bulk",
       }),
     ),

@@ -291,6 +291,10 @@ export async function sendPaymentConfirmSmsAction(opts: {
       to: student.guardian_phone,
       message,
       vendorId: student.vendor_id,
+      branchId: auth.profile.branch_id,
+      senderId: auth.profile.id,
+      senderName: auth.profile.full_name,
+      recipientName: student.full_name,
       studentId: student.id,
       purpose: "payment_confirmation",
     });
@@ -454,6 +458,10 @@ export async function sendDonationConfirmSmsAction(opts: {
       to: donation.donor_phone,
       message,
       vendorId: donation.vendor_id,
+      branchId: auth.profile.branch_id,
+      senderId: auth.profile.id,
+      senderName: auth.profile.full_name,
+      recipientName: donation.donor_name,
       purpose: "donation_confirmation",
     });
 

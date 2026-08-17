@@ -118,7 +118,11 @@ export async function sendCustomSmsAction(input: {
       to: validPhones,
       message,
       vendorId: auth.profile.vendor_id,
+      branchId: auth.profile.branch_id,
+      senderId: auth.profile.id,
+      senderName: auth.profile.full_name,
       purpose: "custom_sms",
+      recipientNames: validRecipients.map((r) => r.name),
     });
 
     const resultDesc =
@@ -281,8 +285,12 @@ export async function sendBulkStudentSmsAction(input: {
         to: chunk.map((r) => toWhatsAppMsIsdn(r.phone)),
         message,
         vendorId: auth.profile.vendor_id,
+        branchId: auth.profile.branch_id,
+        senderId: auth.profile.id,
+        senderName: auth.profile.full_name,
         purpose: "bulk_student_sms",
         studentIds: chunk.map((r) => r.studentId),
+        recipientNames: chunk.map((r) => r.name),
       });
 
       const resultDesc =
@@ -457,7 +465,12 @@ export async function sendBulkStaffSmsAction(input: {
         to: chunk.map((r) => toWhatsAppMsIsdn(r.phone)),
         message,
         vendorId: auth.profile.vendor_id,
+        branchId: auth.profile.branch_id,
+        senderId: auth.profile.id,
+        senderName: auth.profile.full_name,
         purpose: "bulk_staff_sms",
+        staffIds: chunk.map((r) => r.staffId),
+        recipientNames: chunk.map((r) => r.name),
       });
 
       const resultDesc =

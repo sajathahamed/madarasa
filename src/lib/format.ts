@@ -47,6 +47,17 @@ export function formatDate(value: string | null | undefined) {
   });
 }
 
+export function formatDateTime(value: string | null | undefined) {
+  if (!value) return "—";
+  return new Date(value).toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export function formatRole(role: string) {
   return role.replaceAll("_", " ");
 }

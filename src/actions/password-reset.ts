@@ -288,7 +288,7 @@ async function issueOtp(
 
   const { data: profile, error: profileError } = await admin
     .from("app_users")
-    .select("id, status")
+    .select("id, status, vendor_id, branch_id, full_name")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -334,6 +334,10 @@ async function issueOtp(
   const sms = await sendDialogSms({
     to: sendTo,
     message: `Madarasa password reset OTP: ${code}. Valid for 10 minutes. Do not share this code.`,
+    vendorId: profile.vendor_id,
+    branchId: profile.branch_id,
+    senderName: "System",
+    recipientName: profile.full_name,
     purpose: "password_reset_otp",
   });
 

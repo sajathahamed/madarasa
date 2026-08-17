@@ -128,6 +128,7 @@ export function opsNav(profile: AppUser) {
       { href: "/branch/progress", label: "Progress" },
       ...smsLink,
       { href: "/branch/reports", label: "Reports" },
+      { href: "/branch/sms-log", label: "SMS log" },
       { href: "/branch/admin", label: "Admin delete" },
     ];
   }
@@ -182,6 +183,7 @@ export function opsNav(profile: AppUser) {
         ];
 
   if (canManageAdminOps(profile.role)) {
+    items.push({ href: "/branch/sms-log", label: "SMS log" });
     items.push({ href: "/branch/admin", label: "Admin delete" });
   }
   if (profile.role === "super_admin") {
