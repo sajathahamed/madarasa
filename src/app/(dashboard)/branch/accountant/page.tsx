@@ -1,9 +1,11 @@
 import { AccountantDeskClient } from "@/components/accountant/accountant-desk-client";
 import { OpsShell } from "@/components/layout/ops-shell";
+import { ensureMonthlyFeeDues } from "@/lib/fees/ensure-monthly-dues";
 import { requireOpsContext } from "@/lib/ops-page";
 
 export default async function AccountantDeskPage() {
   const { supabase, profile } = await requireOpsContext();
+  await ensureMonthlyFeeDues();
 
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();

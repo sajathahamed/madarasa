@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { classDisplayName } from "@/lib/academic-sections";
+import { DEFAULT_MONTHLY_FEE } from "@/lib/format";
 import type { AcademicSection } from "@/types/database";
 
 type ClassOption = {
@@ -154,6 +155,7 @@ export function CreateStudentForm({
               step="0.01"
               min="0"
               required
+              defaultValue={DEFAULT_MONTHLY_FEE}
             />
           </div>
           <div className="space-y-1">

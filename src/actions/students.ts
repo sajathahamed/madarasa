@@ -3,7 +3,7 @@
 import { z } from "zod";
 
 import { canEditStudent, requireProfile } from "@/lib/auth/session";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { ensureMonthlyFeeDues } from "@/lib/fees/ensure-monthly-dues";
 import {
   notifyAbsence,
   notifyPaymentReminder,
@@ -192,13 +192,9 @@ export async function generateDuesAction(month?: number, year?: number) {
       return { error: "Forbidden" };
     }
 
-    const admin = createAdminClient();
-    const { data, error } = await admin.rpc("generate_monthly_fee_dues", {
-      p_month: month,
-      p_year: year,
-    });
-    if (error) return { error: error.message };
-    return { ok: true as const, generated: data as number };
+    const result = await ensureMonthlyFeeDues(month, year);
+    if (result.error) return { error: result.error };
+    return { ok: true as const, generated: result.generated };
   } catch (err) {
     console.error("[generateDuesAction]", err);
     return {

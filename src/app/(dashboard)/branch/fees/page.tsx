@@ -3,10 +3,12 @@ import { FeesOfficeClient } from "@/components/fees/fees-office-client";
 import { OpsShell } from "@/components/layout/ops-shell";
 import { canEnterData } from "@/lib/auth/session";
 import { aggregateSum } from "@/lib/db-aggregate";
+import { ensureMonthlyFeeDues } from "@/lib/fees/ensure-monthly-dues";
 import { requireOpsContext } from "@/lib/ops-page";
 
 export default async function FeesPage() {
   const { supabase, profile } = await requireOpsContext();
+  await ensureMonthlyFeeDues();
 
   const now = new Date();
   const month = now.getMonth() + 1;

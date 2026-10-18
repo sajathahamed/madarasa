@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { createAdminClient } from "@/lib/supabase/admin";
+import { ensureMonthlyFeeDues } from "@/lib/fees/ensure-monthly-dues";
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -11,16 +11,14 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const admin = createAdminClient();
-    const { data, error } = await admin.rpc("generate_monthly_fee_dues");
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    const result = await ensureMonthlyFeeDues();
+    if (result.error) {
+      return NextResponse.json({ error: result.error }, { status: 500 });
     }
 
     return NextResponse.json({
       ok: true,
-      generated: data,
+      generated: result.generated,
       at: new Date().toISOString(),
     });
   } catch (err) {

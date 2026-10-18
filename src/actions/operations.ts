@@ -3,6 +3,7 @@
 import { z } from "zod";
 
 import { requireProfile } from "@/lib/auth/session";
+import { ensureMonthlyFeeDues } from "@/lib/fees/ensure-monthly-dues";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { displayVendorName } from "@/lib/vendor-branding";
 import type { ApprovalStatus, PaymentMethod, DonationType } from "@/types/database";
@@ -109,6 +110,8 @@ export async function createStudentAction(input: z.infer<typeof studentSchema>) 
           healthError?.message ?? planError?.message ?? "Related insert failed",
       };
     }
+
+    await ensureMonthlyFeeDues();
 
     if (parsed.data.class_id) {
       const { error: enrollError } = await auth.supabase

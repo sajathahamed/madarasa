@@ -8,11 +8,13 @@ import {
   StatCard,
 } from "@/components/dashboard/ui";
 import { roleLabel } from "@/lib/auth/roles";
+import { ensureMonthlyFeeDues } from "@/lib/fees/ensure-monthly-dues";
 import { formatMoney } from "@/lib/format";
 import { notificationStatus } from "@/lib/notify";
 
 export default async function BranchOverviewPage() {
   const { supabase, profile } = await requireOpsContext();
+  await ensureMonthlyFeeDues();
 
   let studentsQ = supabase
     .from("students")
